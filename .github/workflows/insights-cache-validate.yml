@@ -1,0 +1,45 @@
+name: Insights Cache UI Validate
+on:
+  push:
+    branches: [feature/local-cache-v3-20260920]
+    paths:
+      - 'src/features/local-insights/**'
+      - 'tests/local-insights/**'
+      - 'build-scripts/apply-local-insights.mjs'
+      - '.github/workflows/insights-cache-validate.yml'
+permissions:
+  contents: read
+concurrency:
+  group: insights-cache-ui-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    if: github.repository == 'RICHARDwuxiaofei/VRCX_stalk'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply integration twice and verify idempotence
+        run: |
+          node build-scripts/apply-local-insights.mjs
+          git diff --binary > /tmp/insights-first.diff
+          node build-scripts/apply-local-insights.mjs
+          git diff --binary > /tmp/insights-second.diff
+          cmp /tmp/insights-first.diff /tmp/insights-second.diff
+      - name: Logic, adapter, route and navigation tests
+        run: node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs tests/local-insights/cache-integration.test.mjs
+      - run: npm ci
+      - name: Mounted cache UI regression tests
+        run: npx vitest run --config tests/local-insights/vitest.config.mjs --reporter=default --reporter=json --outputFile=test-results/cache-ui.json
+      - name: Production frontend build
+        run: npm run prod
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: insights-cache-ui-${{ github.run_number }}
+          path: test-results/cache-ui.json
+          if-no-files-found: warn
