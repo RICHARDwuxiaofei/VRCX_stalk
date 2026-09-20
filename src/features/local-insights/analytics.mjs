@@ -6,8 +6,9 @@
 export const EXCLUDED_USER_IDS = Object.freeze([
     'usr_1cf3480c-c735-447d-9227-8e1acbb6bf18'
 ]);
-export const MAX_RECORDS = 60000;
+export const MAX_RECORDS = 500000;
 export const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
+export const MAX_RANGE_MS = 40 * 366 * 24 * 60 * 60 * 1000;
 const TYPES = new Set(['Location', 'OnPlayerJoined', 'OnPlayerLeft']);
 const ORDER = { OnPlayerLeft: 0, Location: 1, OnPlayerJoined: 2 };
 
@@ -58,8 +59,8 @@ function overlap(left, right) {
 export function indexRecords(input, { since, until, observerId = '' } = {}) {
     const from = timestamp(since);
     const to = timestamp(until);
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > 31 * 86400000) {
-        throw new Error('Select a valid time range of at most 31 days.');
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from >= to || to - from > MAX_RANGE_MS) {
+        throw new Error('Select a valid time range.');
     }
     if (!Array.isArray(input) || input.length > MAX_RECORDS) {
         throw new Error('Too many records. Select a shorter range.');
@@ -199,5 +200,100 @@ export function buildReport(index, targetId, { friendIds = new Set() } = {}) {
         days: [...dayMap].sort(([a], [b]) => a.localeCompare(b)).map(([day, ms]) => ({ day, observedMs: ms })),
         timeline,
         notice: 'Observed co-presence in your own recorded sessions, not total online time or proof of interaction. Missing and private activity is unknown. Creators are not presumed present.'
+    };
+}
+
+
+function sessionsByLocation(index, userId) {
+    const result = new Map();
+    for (const session of index.sessions) {
+        if (session.userId !== userId) continue;
+        if (!result.has(session.location)) result.set(session.location, []);
+        result.get(session.location).push([session.start, session.end]);
+    }
+    for (const [location, ranges] of result) result.set(location, union(ranges));
+    return result;
+}
+
+export function buildPairSummary(index, leftId, rightId) {
+    if (leftId === rightId) return { leftId, rightId, observedMs: 0, segments: 0, locations: [] };
+    if (isExcluded(leftId, index.observerId) || isExcluded(rightId, index.observerId)) {
+        throw new Error('This account is excluded from local analysis.');
+    }
+    const left = sessionsByLocation(index, leftId);
+    const right = sessionsByLocation(index, rightId);
+    const locations = [];
+    let observedMs = 0;
+    let segments = 0;
+    for (const [location, leftRanges] of left) {
+        const rightRanges = right.get(location);
+        if (!rightRanges) continue;
+        const intersections = overlap(leftRanges, rightRanges);
+        if (!intersections.length) continue;
+        const duration = intersections.reduce((sum, range) => sum + range[1] - range[0], 0);
+        observedMs += duration;
+        segments += intersections.length;
+        locations.push({
+            location,
+            worldName: index.worldNames.get(location) || location.split(':')[0],
+            observedMs: duration,
+            segments: intersections.length,
+            lastAt: Math.max(...intersections.map((range) => range[1]))
+        });
+    }
+    locations.sort((a, b) => b.lastAt - a.lastAt || b.observedMs - a.observedMs);
+    return {
+        leftId,
+        rightId,
+        leftName: index.names.get(leftId) || leftId,
+        rightName: index.names.get(rightId) || rightId,
+        observedMs,
+        segments,
+        locations
+    };
+}
+
+export function buildGroupReport(index, memberIds, { friendIds = new Set() } = {}) {
+    const ids = [...new Set(memberIds || [])]
+        .filter((id) => index.names.has(id) && !isExcluded(id, index.observerId));
+    const members = ids.map((id) => {
+        const report = buildReport(index, id, { friendIds });
+        return {
+            id,
+            name: report.target.name,
+            observedMs: report.observedMs,
+            completeSessions: report.completeSessions,
+            incompleteSessions: report.incompleteSessions
+        };
+    }).sort((a, b) => b.observedMs - a.observedMs || a.name.localeCompare(b.name));
+    const pairings = [];
+    for (let i = 0; i < ids.length; i += 1) {
+        for (let j = i + 1; j < ids.length; j += 1) {
+            const pair = buildPairSummary(index, ids[i], ids[j]);
+            if (pair.observedMs > 0) pairings.push(pair);
+        }
+    }
+    pairings.sort((a, b) => b.observedMs - a.observedMs || b.segments - a.segments);
+    const timeline = index.events
+        .filter((event) => ids.includes(event.userId) && event.type !== 'Location' && event.at >= index.from && event.at <= index.to)
+        .map((event) => ({
+            at: event.at,
+            type: event.type,
+            rowId: event.rowId,
+            source: 'GameLog',
+            actorId: event.userId,
+            actorName: index.names.get(event.userId) || event.userId,
+            location: redact(event.location, index.observerId),
+            worldName: redact(index.worldNames.get(event.location) || event.location.split(':')[0], index.observerId)
+        }))
+        .reverse();
+    return {
+        schemaVersion: 1,
+        kind: 'local-observed-group-shared-sessions',
+        since: new Date(index.from).toISOString(),
+        until: new Date(index.to).toISOString(),
+        members,
+        pairings,
+        timeline
     };
 }
