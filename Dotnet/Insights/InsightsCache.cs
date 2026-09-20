@@ -27,7 +27,7 @@ public sealed partial class InsightsCache
 
     public InsightsCache(string sourcePath, string profileRoot, string account)
     {
-        if (!Regex.IsMatch(account ?? "", @"^usr_[0-9a-fA-F-]{36}$"))
+        if (string.IsNullOrEmpty(account) || !Regex.IsMatch(account, @"^usr_[0-9a-fA-F-]{36}$"))
             throw new ArgumentException("Please sign in before opening the analysis cache.");
         this.sourcePath = Path.GetFullPath(sourcePath);
         this.account = account;
@@ -43,6 +43,7 @@ public sealed partial class InsightsCache
     {
         using var request = JsonDocument.Parse(json);
         var q = request.RootElement;
+        if (q.ValueKind != JsonValueKind.Object) throw new ArgumentException("Expected a cache request object.");
         var action = Text(q, "action");
         var mutexKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CachePath)));
         using var mutex = new Mutex(false, "vrcx-insights-" + mutexKey);
@@ -52,6 +53,8 @@ public sealed partial class InsightsCache
             try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(5)); }
             catch (AbandonedMutexException) { acquired = true; }
             if (!acquired) throw new InvalidOperationException("Another analysis request is still running. Try again shortly.");
+            if (action is not ("status" or "create" or "rebuild") && !File.Exists(CachePath))
+                throw new InvalidOperationException("Create the local analysis file explicitly before starting analysis.");
             object result = action switch
             {
                 "status" => Status(),
@@ -122,7 +125,7 @@ public sealed partial class InsightsCache
     private static string Str(Dictionary<string, object?> row, string key) => row.TryGetValue(key, out var value) ? value?.ToString() ?? "" : "";
     private static long Int(Dictionary<string, object?> row, string key) => long.TryParse(Str(row, key), out var n) ? n : 0;
     private static string Text(JsonElement q, string key) => q.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
-    private static long Long(JsonElement q, string key, long fallback) => q.TryGetProperty(key, out var v) && v.TryGetInt64(out var n) ? n : fallback;
+    private static long Long(JsonElement q, string key, long fallback) => q.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt64(out var n) ? n : fallback;
     private bool IsExcluded(string id) => string.IsNullOrEmpty(id) || id == account || id == Excluded;
     private static bool Visible(string location) => Regex.IsMatch(location, @"^wrld_[^\s:]+:[^\s]+$");
     private static bool Encounter(string kind) => kind is "Location" or "OnPlayerJoined" or "OnPlayerLeft";
@@ -150,7 +153,6 @@ public sealed partial class InsightsCache
         if (File.Exists(CachePath))
         {
             if (!rebuild) return Status();
-            // Only this generated file is disposable. Never delete or move a source file.
             using (var old = Open(CachePath, false)) Exec(old, "PRAGMA wal_checkpoint(TRUNCATE)");
             File.Move(CachePath, CachePath + ".previous-" + DateTime.UtcNow.ToString("yyyyMMddHHmmssfff"));
         }
@@ -303,6 +305,7 @@ public sealed partial class InsightsCache
                 if (old != null && Encounter(Str(old, "kind"))) dirty = Math.Min(dirty, Int(old, "at_ms"));
                 Exec(db, "DELETE FROM events WHERE source=@source AND source_id=@id", "@source", name, "@id", id);
                 if (!validTime) Exec(db, "INSERT OR REPLACE INTO rejected VALUES(@source,@id,'invalid timestamp')", "@source", name, "@id", id);
+                else Exec(db, "DELETE FROM rejected WHERE source=@source AND source_id=@id", "@source", name, "@id", id);
                 continue;
             }
             var location = Str(raw, "location");
