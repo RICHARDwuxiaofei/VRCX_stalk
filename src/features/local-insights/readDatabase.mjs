@@ -37,9 +37,11 @@ export async function readDatabase(execute, { since, until, observerId, userPref
         if (!isExcluded(userId, observerId)) records.push({ rowId, created_at: normalizeDate(created_at), type, displayName, location, userId });
     }
     const activityLogs = [
-        ...joins.map(([rowId, created_at, type, displayName, location, userId]) => ({
-            rowId, created_at: normalizeDate(created_at), type, displayName, location, userId
-        })),
+        ...joins
+            .filter(([, , , , , userId]) => !isExcluded(userId, observerId))
+            .map(([rowId, created_at, type, displayName, location, userId]) => ({
+                rowId, created_at: normalizeDate(created_at), type, displayName, location, userId
+            })),
         ...statuses.map(([rowId, created_at, userId, displayName, status, statusDescription, previousStatus, previousStatusDescription]) => ({
             rowId, created_at: normalizeDate(created_at), type: 'Status', userId, displayName,
             status, statusDescription, previousStatus, previousStatusDescription
