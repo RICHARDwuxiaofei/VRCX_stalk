@@ -1,16 +1,22 @@
-# VRCX Insights v3 Cache Preview
+# VRCX Insights v4 Legacy Cache Preview
 
 非官方 Windows x64 预览版，基于 VRCX v2026.09.16。**不是完整 Jirai 移植。** 本次发布仅在 `RICHARDwuxiaofei/VRCX_stalk`，不创建任何上游 Pull Request。
 
 ## 下载安装
 
-下载 `VRCX-Insights_2026.09.20-cache-v3_Setup.exe`，或完整解压 `VRCX-Insights_2026.09.20-cache-v3.zip` 后运行 `VRCX-Insights.exe`。不要仅复制 EXE 或 HTML；v3 增加了原生 C# 缓存模块，前后端必须一起更新。
+下载 `VRCX-Insights_2026.09.20-cache-v4_Setup.exe`，或完整解压 `VRCX-Insights_2026.09.20-cache-v4.zip` 后运行 `VRCX-Insights.exe`。不要仅复制 EXE 或 HTML；v4 包含原生 C# 缓存模块和旧 VRCX 数据库兼容层，前后端必须一起更新。
 
 ## 这次的操作顺序
 
 **正常侧边栏下方 → 共同游玩回顾 → 阅读耗时提示并勾选确认 → 创建分析文件 → 手动开始首次分析 → 完成后打开回顾。**
 
 进入页面和创建文件都不会自动扫描历史。已有缓存可直接打开。增量更新、暂停/继续、重建缓存都由用户手动触发；重建保留旧分析文件备份，不修改原始 VRCX 数据。
+
+## 老数据库兼容
+
+首次分析时自动识别已知历史官方 VRCX 表/字段布局，并在**只读**模式下把旧字段投影为当前分析格式。支持常见 snake_case/camelCase 差异、rowid 回退、旧 join/leave 名称、Unix 秒/毫秒，以及老记录中的 `DisplayName (usr_...)`。原始 SQLite 不会被升级或覆盖；无法安全解释的核心结构会停止而不是猜。
+
+这不是多文件合并器：当前仍是一份源 SQLite 对应一份分析缓存。
 
 ## 主要变化
 
