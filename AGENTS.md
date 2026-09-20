@@ -30,3 +30,8 @@ Keep this an evidence-based local encounter diary: no hidden-location guesses, c
 Do not upload personal logs, generated personal caches, cookies, credentials, real databases or player-identifying screenshots. Use synthetic fixtures.
 
 Report PASS only when that test actually ran. Distinguish pure tests, mocked Vue/native transport tests, actual SQLite tests, frontend/native compilation, installer compilation, and real Windows/VR acceptance. Never publish from a failed build, weaken a regression to obtain a green check, or report queued/in-progress Actions as completed. Match the released files to the tested commit and checksums.
+
+
+Legacy database compatibility: keep source SQLite files read-only. Historical official VRCX field/table variants are normalized through `Dotnet/Insights/InsightsCache.Legacy.cs` into the disposable analysis cache. Never ALTER/UPDATE the user's old source database to make a test pass. Unknown core layouts must fail safely. Add real SQLite fixtures to `tests/InsightsCache.Legacy` for each supported alias.
+
+Current safe working branch for this delivery: `feature/legacy-db-adapter-v4-20260920`. Do not open or target any upstream pull request. Releases must explicitly use `--repo RICHARDwuxiaofei/VRCX_stalk`.
