@@ -1,0 +1,31 @@
+name: Insights Cache Native Tests
+on:
+  push:
+    branches: [feature/local-cache-v3-20260920]
+    paths:
+      - 'Dotnet/Insights/**'
+      - 'tests/InsightsCache.Native/**'
+      - '.github/workflows/insights-cache-native.yml'
+permissions:
+  contents: read
+concurrency:
+  group: insights-cache-native-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  native:
+    if: github.repository == 'RICHARDwuxiaofei/VRCX_stalk'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+      - name: Actual SQLite persistence, large-history and incremental tests
+        run: dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: insights-cache-native-${{ github.run_number }}
+          path: test-results/cache-native.json
+          if-no-files-found: warn
