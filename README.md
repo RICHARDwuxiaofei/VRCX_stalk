@@ -1,143 +1,121 @@
-<div align="center">
+# VRCX Insights / VRCX_stalk
 
-# <img src="https://raw.githubusercontent.com/vrcx-team/VRCX/master/images/VRCX.ico" width="64" height="64"> </img> VRCX
+基于 VRCX v2026.09.16 的非官方 Windows x64 测试分支，新增 **共同游玩回顾与独立本地分析缓存**。
 
-[![GitHub release](https://img.shields.io/github/release/vrcx-team/VRCX.svg)](https://github.com/vrcx-team/VRCX/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/vrcx-team/VRCX/total?color=6451f1)](https://github.com/vrcx-team/VRCX/releases/latest)
-[![GitHub Workflow Status](https://github.com/vrcx-team/VRCX/actions/workflows/github_actions.yml/badge.svg)](https://github.com/vrcx-team/VRCX/actions/workflows/github_actions.yml)
-[![VRCX Discord Invite](https://img.shields.io/discord/854071236363550763?color=%237289DA&logo=discord&logoColor=white&label=discord)](https://vrcx.app/discord)
+**这不是 VRCX 官方版本，也不是完整的 VRCX-jirai（地雷版）移植。** 不要去官方仓库寻找本分支的安装包，不要将本分支的功能问题提交给官方。
 
-| **English** | [Français](./README/README.fr.md) | [日本語](./README/README.jp.md) | [简体中文](./README/README.zh_CN.md) | [Italiano](./README/README.it.md) | [Русский](./README/README.ru_RU.md) | [Español](./README/README.es.md) | [Polski](./README/README.pl.md) | [ภาษาไทย](./README/README.th.md) | [Magyar](./README/README.hu.md)
+[下载本分支的 Release](https://github.com/RICHARDwuxiaofei/VRCX_stalk/releases) · [Jirai 功能在哪里、哪些没有移植](docs/JIRAI_GUIDE.md) · [人工验收指南](docs/LOCAL_INSIGHTS_TESTING.md) · [Agent 开发说明](docs/AGENT_README.md) · [交接文档](docs/AI_HANDOFF.md)
 
-VRCX is an assistant/companion application for VRChat that provides information about and helps you accomplish various things related to VRChat in a more convenient fashion than relying on the plain VRChat client (desktop or VR), or website alone. It also includes some other neat features outlined below.
+## 下载、安装与更新
 
-# Getting Started
+在上面的 Releases 页面选择 **v3 Cache Preview**。下载附件中的 `VRCX-Insights_2026.09.20-cache-v3_Setup.exe` 安装版，或 `VRCX-Insights_2026.09.20-cache-v3.zip` 解压版。不要下载页面底部的 Source code 来运行。
 
-<div align="center">
+解压版需要完整解压后运行 `VRCX-Insights.exe`，不能只取一个 EXE。安装版和解压版都使用独立的 Insights 配置目录，不会因为程序解压在另一目录就自动得到第二份分析数据。
 
-Download and install the latest installer (`VRCX_Setup.exe`) from [here](https://github.com/vrcx-team/VRCX/releases/latest).
+更新前退出旧版 Insights 并备份其配置目录。安装器和程序目前未签名；Release 标为预览版，自动构建通过不代表已经完成每台电脑上的图形界面、安装/卸载或 VR 验收。
 
-For macOS and Linux check [here](https://github.com/vrcx-team/VRCX/wiki/Running-VRCX-on-Linux) for more info.
+本分支保留安装隔离：
 
-Beta/nightly build available [here](https://vrcx.app/github/nightly) or in-app `Settings -> General -> Change build`.
+| 项目 | Insights 默认位置 / 行为 |
+| --- | --- |
+| 程序 | `VRCX-Insights.exe` |
+| 安装目录 | `Program Files\VRCX-Insights` |
+| 配置目录 | `%APPDATA%\VRCX-Insights` |
+| 分析缓存 | 配置目录下 `AnalyticsCache` |
+| 更新 | 手动下载本仓库的 Release；不安装官方更新覆盖本 fork |
 
-# Features
+不要覆盖官方 `%APPDATA%\VRCX`，不要让两个程序共同写同一个数据库。本分析模块不自动导入官方账号、Cookie 或历史资料。导入旧历史请先关闭相关程序并备份，使用独立副本；不要将正在写入的 SQLite 文件直接随意复制覆盖。
 
-<div align="left">
+## v3 第一次怎么用
 
-- :family: Friend, world, and avatar list management
-  - Manage your friends list, world/group/avatar lists outside of VRChat.
-  - Monitor the activity of your friends and track their online status, locations, and avatars.
-  - Track friendship history including add dates, time spent together, and name changes.
-  - Save notes and memos to help remember how you met.
-- :bar_chart: Customizable Dashboard with widgets
-  - Build personalized multi-panel layouts with Feed, GameLog, and Instance widgets.
-  - Create multiple dashboards, each with configurable event filters and column visibility.
-- :mag: Powerful search across all entities
-  - Search for users, worlds, avatars, and groups, or paste IDs and URLs for direct access.
-  - Quick Search provides instant client-side fuzzy search across your friends, avatars, worlds, and groups.
-- :chart_with_upwards_trend: Activity Heatmap
-  - Visualize a user's online activity patterns with a day-of-week × hour-of-day heatmap, including peak stats.
-- :camera: Store world data in the pictures you take in-game, so you can remember that one world you took those cool pictures in like... 6 months ago!
-- :bell: Monitor/respond to notifications
-  - You can send/receive invites and friend requests from VRCX as well as see the instance info of invites that you receive.
-- :scroll: See stats/players for your current instance
-- :tv: See the links to videos that are playing in the world you're in, as well as various other logged data.
-- :performing_arts: Social Status Presets
-  - Save and quickly apply status + status description combinations from the sidebar or user dialog.
-- :rotating_light: VRChat Server Status
-  - A status bar indicator and login page alert inform you of VRChat server issues and outages in real time.
-- :bar_chart: Improved Discord Rich Presence
-  - Display detailed instance information in Discord, including world thumbnail, name, player count, and a join button for public lobbies.
-- :crystal_ball: VR Overlay with configurable live feed of all supported events/notifications
-- :outbox_tray: Upload and manage avatar/world images and details without Unity
-- :electric_plug: Automatically launch apps when you start VRChat
-- :skull: Automatically restart and join last instance when VRC crashes
-- :left_right_arrow: Export/import data
-  - Export friends list, avatar list, Discord names, notes, and favorite groups. Import favorite groups and group moderation bans.
+1. 在正常侧边栏的下方找到 **共同游玩回顾**。它与好友动态、游戏日志、社交、通知、图表处于同一导航体系，不再是左上角额外挂的一块。
+2. 页面先展示文件状态和“首次分析可能耗费较长时间”的提示。**仅进入页面、切换页面或刷新文件状态，都不会开始扫描历史。**
+3. 勾选已了解耗时及磁盘占用，再点 **创建分析文件（不开始扫描）**。这一步只创建缓存文件和表结构。
+4. 有空时再点 **开始首次分析**。界面显示分批整理源记录、建立在场片段索引两个阶段，以及已处理数量。
+5. 完成后点 **打开已生成的回顾**，再选择看人、看分组和时间范围。
 
-## Miscellaneous
+已有文件时，可以直接打开缓存，不必重新分析源数据库。分析过程中可以暂停；当前批次提交后停止。离开页面也不继续派发新的分析批次。再次进入时按 **继续未完成的分析**，不会偷偷从头重跑。
 
-- Want a new look for VRCX? Check out [Themes](https://github.com/vrcx-team/VRCX/wiki/Themes)
-- See [Building from source](https://github.com/vrcx-team/VRCX/wiki/Building-from-source) for instructions on how to build VRCX from source.
-- For a guide on how to run VRCX on Linux, see [here](https://github.com/vrcx-team/VRCX/wiki/Running-VRCX-on-Linux)
-- Interested in contributing? See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
+### 侧边栏位置不喜欢怎么办
 
-# Screenshots
+使用原有的 **右键侧边栏 → 自定义导航栏**，即可对“共同游玩回顾”排序、隐藏或放入文件夹。已有自定义导航布局会保留；新项目作为普通项目加入布局。
 
-<div align="center">
+它是正常页面入口，不是强行置顶的特殊按钮，也不是另外新增一种仪表盘组件。原有“新建仪表板”和 Feed / GameLog 等仪表板组件照常工作。
 
-<h3>Login</h3>
+## 文件存在哪里，为什么不是 CSV
 
-<table>
-  <tr>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251994190-5e6a961e-b2fe-4d3b-bf66-455d8626b8bf.png" alt="login"></td>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251994414-a21faf59-6199-45de-94e7-a093a6b8c0ac.png" alt="2fa"></td>
-  </tr>
-</table>
+默认结构：
 
-<h3>Feed</h3>
+```text
+%APPDATA%\VRCX-Insights\
+└─ AnalyticsCache\
+   └─ <当前账号 ID>\
+      └─ <源数据库路径指纹>\
+         └─ analysis-v1.db
+```
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251987020-9839a2c9-47db-4271-b1bf-8e07669a7056.png" alt="feed">
+页面会显示本机的准确路径，并可复制。`v1` 是分析文件的结构版本，不是应用版本号。
 
-<h3>GameLog</h3>
+缓存使用 SQLite，保存规范化事件、时间索引、已经配对的在场片段和同步进度。它与原始 VRCX 数据库分开；源数据由分析模块只读打开。这里没有 CSV 导入/导出按钮，也没有将 CSV 作为程序查询数据库。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251987498-b82266ed-131d-42ad-be2f-b167f24acf9f.png" alt="gamelog">
+旧版和新版日志先按已知表结构适配，时间转换为 UTC 毫秒整数，再写入这个独立文件。可选表缺失会在诊断中说明；不认识的结构会报错，不会猜测后改写源库。本版本不承诺支持所有第三方魔改数据库。
 
-<h3>UserInfo</h3>
+## 看人、分组、日志和分页
 
-<h4>Me</h4>
+**看人：** 输入名字或用户 ID，从下面的联想中直接选人。联想来自缓存目录，支持键盘上下选择和回车。勾选“联想只显示好友”只影响候选名单，不会将已经观测到的非好友共同在场证据抹掉。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251990237-0c863d27-141c-4447-82de-4279ab8973ea.png" alt="me">
+**看分组：** 在“管理分组”中创建、编辑或删除本地分组，输入名字添加成员。旧 v2 保存的分组会继续读取。每组分析最多 200 人；超过时需要拆分，不会悄悄截断已保存成员。
 
-<h4>Friend</h4>
+分组概览展示组内成员及两两共同在场记录；点击成员进入该人的回顾，再点返回回到分组。一个人组成的分组没有组内配对，不会把组外人物算成组内结果。这里的“分组”是本地自定义名单，不是 VRChat Group，不会触发加群。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251989666-8f918786-e632-451d-be29-f92d2c681b80.png" alt="friend">
+**左侧相遇记录下方是日志。** 可筛选全部已缓存类型、进入房间、退出房间、切换状态、更改 Bio。全部类型还可包含源库已有的位置变化、上下线、头像与好友历史；它不代表软件运行日志或尚未被源程序记录的信息。
 
-<h3>World</h3>
+相遇记录和日志默认显示 10 条，点一次“再展开 20 条”后显示 30 条，再按页查看。每页可选 10 / 20 / 30 / 50 / 100 条。页码窗口显示五个数字，但 **数据不是最多五页**，可继续下一页或直接跳末页。查询和分页发生在缓存数据库中，不会先把全部历史传给浏览器再隐藏。
 
-<table>
-  <tr>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251991003-37a986bb-470c-442b-8ada-31918f7b2017.png" alt="instance"></td>
-    <td align="center"><img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251991217-0d40846f-ac08-48c0-8e4d-18c35fe0999b.png" alt="info"></td>
-  </tr>
-</table>
+时间范围支持 24 小时、7 天、30 天、自定义和永久。永久代表缓存中已经完成分析的全部历史，不等于补齐从未记录过的活动。自定义输入按本机时区解释，内部统一使用 UTC；页面显示也使用本机时区。
 
-<h3>Favorite</h3>
+## 今天的新记录怎么出现
 
-<h4>Friend</h4>
+点 **更新缓存（增量）**。系统读取新增记录，并复查各历史来源表最近一小段 ID 范围；没有变化的旧事件不会重复累加。首次导入后，平常打开缓存和翻页都不需要重新扫描源库。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251992424-ba406d0f-787e-4e2d-89bd-4caa0a05d31f.png" alt="friend">
+增量不是无限保证：新增但时间较早的历史行会使相关观察场次重新计算；**替换数据库、批量导入、修改较早的旧行或删除旧历史后，建议手动重建缓存。** 记录数量倒退、ID 倒退和表结构改变会要求重建；不能仅凭最大 ID 检出所有可能的文件替换。
 
-<h4>World</h4>
+重建会保留旧缓存为 `.previous-时间` 文件，只重建分析库，然后等待你手动开始分析。原始数据和本地分组不被删除。旧备份会占用磁盘；确认新缓存正常、关闭程序后再自行管理不需要的旧分析备份。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251992950-8f2c6cdc-dc9a-4a60-b59f-9fa80d071359.png" alt="world">
+## 分析结果是什么意思
 
-<h4>Avatar</h4>
+共同在场仅表示：完整的加入/离开记录在 **相同观察场次、相同实例地址和重叠时间段** 中出现。它不是聊天记录，也不能证明关系、约定或实际互动。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251993408-66d11100-15a8-484f-b9fd-82be1516c9be.png" alt="avatar">
+未闭合记录不会补算到当前时间；切换世界时缺少退出的片段会标记未知。超出当前配对安全阈值（24 小时）的单个片段不计时。不同人可以同时在场，因此不要把所有同伴时长直接相加当成自己的在线时间。
 
-<h3>Friend Log</h3>
+本分析模块不新增远程轮询，不推测隐藏位置，不将房主默认算为在场者，也不自动加入任何 Home Group。正常 VRCX 本身的联网功能与这个本地分析模块是两回事。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251993741-e2033095-4ceb-4552-8b79-9285325c1e49.png" alt="friendlog">
+当前登录账号及原分支已配置的排除账号不作为此功能的分析对象。排除规则见源代码和 Agent 文档，是公开规则，不会删除所有原始 VRCX 日志。
 
-<h3>Discord Rich Presence</h3>
+每个账号、源路径的缓存分开。但历史全局 GameLog 没有逐条记录其当时登录账号的可靠字段，因此不能声称已经按历史账号完全分离所有全局游戏日志。
 
-<img src="https://github-production-user-asset-6210df.s3.amazonaws.com/82102170/251997318-5a71249c-59fc-4ad6-9194-d6b1d4165600.png" alt="discord">
+## 常见问题
 
-<!-- The other images will be similar to this -->
-</div>
+**选择永久仍看到 “The result is too large”。** 先确认窗口标题是 Insights v3、安装的是完整 v3 Release，并已经创建/分析新缓存。v2 的旧页面仍在源码中供回归对照，但正常 v3 路由不再使用旧的全量 JS 读取器。
 
-## Is VRCX against VRChat's TOS?
+**今天有日志，但页面没更新。** 看缓存更新时间，手动增量更新；确认该历史已实际存在于当前 Insights 使用的数据库，而不是只在另一个 VRCX 配置目录。
 
-**No.**
+**只有状态/Bio，没有共同在场时长。** 这些事件不等于完整的房间加入/退出配对。没有证据的时长保持未知。
 
-VRCX is an external tool that uses the VRChat API to provide the features it does.
+**提示 native v3 cache module missing。** 需要完整 EXE 与 HTML 来自同一版本；只替换前端文件不能补上新的 C# 后端。当前可下载测试目标为 Windows x64 CEF，未完成 macOS/Linux Electron 原生桥接与安装验证。
 
-It does not modify the game in any way, only using the API responsibly to provide the features it does. It is not a mod, or a cheat, or any other form of modification to the game.
+**找不到地雷版的双人关系、灯色分布、非好友追踪。** 不是隐藏了：这些 Jirai 扩展没有完整移植。恢复导航默认设置不会凭空新增缺失代码。具体原软件入口和本分支差异看 [Jirai 使用指南](docs/JIRAI_GUIDE.md)。
 
-To see VRChat's stance on API usage, see the #faq channel in the VRChat Discord.
+## 开发与验收
 
----
+本分支的代码、测试和 Release 只在 `RICHARDwuxiaofei/VRCX_stalk` 工作。**不要创建指向 `vrcx-team/VRCX` 或其他原作者仓库的 Pull Request。**
 
-VRCX is not endorsed by VRChat and does not reflect the views or opinions of VRChat or anyone officially involved in producing or managing VRChat properties. VRChat and all associated properties are trademarks or registered trademarks of VRChat Inc. VRChat © VRChat Inc.
+自动化覆盖真实 SQLite 大历史、暂停续建、增量重放、旧时间导入、源文件不被修改、组内分析、翻页和显式分析操作。Release 附带实际运行的测试 JSON、构建信息和 SHA256。具体一次构建是否通过，以该 Release 对应 Actions 为准，不能将早期通过状态套到后续未测提交。
+
+人工验收仍需在自己的 Windows 环境进行。不要把好友数据库、分析缓存、登录资料或含真实玩家信息的截图直接传到公开 Issue/Release；复现优先使用虚构样本。
+
+## 上游、许可和说明
+
+原项目：[vrcx-team/VRCX](https://github.com/vrcx-team/VRCX)。原版功能说明仍可参考 [上游中文 README](README/README.zh_CN.md)。本仓库保留原 [LICENSE](LICENSE) 和贡献者署名；Jirai 指南用于解释区别，不表示已复制其完整代码或得到作者背书。
+
+VRCX Insights is not endorsed by VRChat, the VRCX team, or the Jirai authors. VRChat and associated properties are trademarks or registered trademarks of VRChat Inc.
