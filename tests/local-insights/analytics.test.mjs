@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { indexRecords, buildReport, listPeople, EXCLUDED_USER_IDS, MAX_RECORDS } from '../../src/features/local-insights/analytics.mjs';
+import { indexRecords, buildReport, buildGroupReport, buildPairSummary, listPeople, EXCLUDED_USER_IDS, MAX_RECORDS } from '../../src/features/local-insights/analytics.mjs';
 const fixture = JSON.parse(readFileSync(new URL('./fixtures.json', import.meta.url), 'utf8'));
 const run = (records = fixture.records, options = {}) => indexRecords(records, { ...fixture, ...options });
 const report = (records = fixture.records, options = {}) => buildReport(run(records, options), fixture.targetId, { friendIds: new Set(fixture.friendIds) });
@@ -60,4 +60,23 @@ test('a location boundary prevents pairing across separate visits', () => {
 test('empty data and unknown targets are explicit', () => { assert.deepEqual(listPeople(run([])), []); assert.throws(() => buildReport(run([]), fixture.targetId), /No local/); });
 test('unavailable observer location closes the prior observation window', () => {
     const rows = fixture.records.concat([{ type: 'Location', created_at: '2026-09-19T18:35:00Z', location: 'offline' }]); assert.equal(report(rows).observedMs / 60000, 30);
+});
+
+test('group report summarizes pairwise shared sessions without inventing unseen pairs', () => {
+    const index = run();
+    const group = buildGroupReport(index, ['demo:alex', 'demo:blair', 'demo:casey'], { friendIds: new Set(fixture.friendIds) });
+    assert.equal(group.members.length, 3);
+    const alexCasey = group.pairings.find((pair) => [pair.leftId, pair.rightId].includes('demo:alex') && [pair.leftId, pair.rightId].includes('demo:casey'));
+    const alexBlair = group.pairings.find((pair) => [pair.leftId, pair.rightId].includes('demo:alex') && [pair.leftId, pair.rightId].includes('demo:blair'));
+    assert.equal(alexCasey.observedMs / 60000, 40);
+    assert.equal(alexBlair.observedMs / 60000, 30);
+});
+test('pair summary groups overlap by exact instance location', () => {
+    const pair = buildPairSummary(run(), 'demo:alex', 'demo:casey');
+    assert.equal(pair.observedMs / 60000, 40);
+    assert.equal(pair.locations.length, 2);
+});
+test('long custom/all-time ranges are accepted within the documented safety cap', () => {
+    const long = run([], { since: '2020-01-01T00:00:00Z', until: '2026-09-20T00:00:00Z' });
+    assert.equal(long.events.length, 0);
 });

@@ -1,0 +1,29 @@
+name: Insights V2 Validate
+on:
+  push:
+    branches: [fix/local-insights-v2-20260920]
+permissions:
+  contents: read
+concurrency:
+  group: insights-v2-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Apply local insights integration
+        run: node build-scripts/apply-local-insights.mjs
+      - name: Node analysis and database adapter tests
+        run: node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs
+      - name: Install dependencies
+        run: npm ci
+      - name: Vue component tests
+        run: npx vitest run --config tests/local-insights/vitest.config.mjs
+      - name: Production frontend build
+        run: npm run prod
