@@ -16,7 +16,7 @@ export async function cacheRequest(action, options = {}) {
     return result;
 }
 
-/** No automatic timer/polling. Called only after a user's Start/Resume/Update action. */
+/** Called only after an explicit Start/Resume/Update action, never on page entry. */
 export async function runCacheAnalysis({ onProgress = () => {}, cancelled = () => false } = {}) {
     if (cancelled()) return null;
     let status = await cacheRequest('start');
@@ -26,7 +26,6 @@ export async function runCacheAnalysis({ onProgress = () => {}, cancelled = () =
         status = await cacheRequest('step', { jobId: status.jobId });
         if (cancelled()) return status;
         onProgress(status);
-        // Return control to the renderer between native transactions.
         await new Promise((resolve) => setTimeout(resolve, 20));
     }
     return status;
@@ -37,9 +36,7 @@ export function cacheRange(kind, start = '', end = '', now = Date.now()) {
     if (kind === 'custom') {
         const since = Date.parse(start);
         const until = end ? Date.parse(end) : now;
-        if (!Number.isFinite(since) || !Number.isFinite(until) || since >= until) {
-            throw new Error('Choose a valid start and end time.');
-        }
+        if (!Number.isFinite(since) || !Number.isFinite(until) || since >= until) throw new Error('Choose a valid start and end time.');
         return { since, until };
     }
     const days = Number(kind);
@@ -51,8 +48,10 @@ export function savedCacheGroups(account = currentCacheAccount()) {
     try {
         const value = JSON.parse(localStorage.getItem(`localInsights.groups.${account}`) || '[]');
         if (!Array.isArray(value)) return [];
+        // Keep every valid member of old groups. Oversized queries are rejected explicitly
+        // by the backend; importing a preference must never silently discard members.
         return value.filter((g) => g && typeof g.id === 'string' && typeof g.name === 'string' && Array.isArray(g.members))
-            .map((g) => ({ id: g.id, name: g.name.slice(0, 64), members: [...new Set(g.members.filter((id) => typeof id === 'string'))].slice(0, 200) }));
+            .map((g) => ({ id: g.id, name: g.name.slice(0, 64), members: [...new Set(g.members.filter((id) => typeof id === 'string'))] }));
     } catch { return []; }
 }
 
