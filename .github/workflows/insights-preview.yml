@@ -1,7 +1,7 @@
 name: Insights Windows Preview
 on:
   push:
-    branches: [fix/local-insights-v2-20260920]
+    branches: [feature/local-cache-v3-20260920]
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,12 +10,24 @@ concurrency:
   cancel-in-progress: true
 jobs:
   windows:
+    if: github.repository == 'RICHARDwuxiaofei/VRCX_stalk'
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     permissions:
       contents: write
+    env:
+      GH_REPO: RICHARDwuxiaofei/VRCX_stalk
     steps:
+      - name: Verify fork-only release target
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REPOSITORY -cne 'RICHARDwuxiaofei/VRCX_stalk') { throw 'Refusing an upstream or unrelated repository' }
+          if ($env:GH_REPO -cne 'RICHARDwuxiaofei/VRCX_stalk') { throw 'Unexpected GH_REPO' }
       - uses: actions/checkout@v6
+        with:
+          repository: RICHARDwuxiaofei/VRCX_stalk
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -32,25 +44,29 @@ jobs:
           if ($first -cne $second) { throw 'Integration is not idempotent' }
           New-Item -ItemType Directory test-results -Force | Out-Null
           $second | Set-Content test-results/applied-integration.diff -Encoding utf8
-      - name: Analysis and read-only adapter tests
+      - name: Logic, source adapter and navigation integration tests
         shell: pwsh
         run: |
-          node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs
+          node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs tests/local-insights/cache-integration.test.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node tests/local-insights/run-report.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install locked frontend dependencies
         run: npm ci
-      - name: Mounted Vue component tests
+      - name: Mounted Vue and opt-in cache UI tests
         run: npx vitest run --config tests/local-insights/vitest.config.mjs --reporter=default --reporter=json --outputFile=test-results/ui-tests.json
       - name: Build production frontend
         run: npm run prod
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Build Windows application
+      - name: Real SQLite duplicate, boundary and cache lifecycle tests
+        run: dotnet run --project tests/InsightsCache.Edges/InsightsCache.Edges.csproj -c Release
+      - name: Real SQLite half-million source rows and incremental persistence tests
+        run: dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release -- --stress
+      - name: Build Windows application including native cache bridge
         run: dotnet build Dotnet/VRCX-Cef.csproj -p:Configuration=Release -p:WarningLevel=0 -p:Platform=x64 -p:PlatformTarget=x64 -p:RestorePackagesConfig=true '-t:Restore;Clean;Build' -m -a x64 --self-contained
-      - name: Stage isolated package and verified Microsoft runtime
+      - name: Stage isolated package, documentation and verified Microsoft runtime
         shell: pwsh
         run: |
           if (!(Test-Path build/Cef/VRCX-Insights.exe)) { throw 'Missing renamed executable' }
@@ -59,9 +75,34 @@ jobs:
           if ($LASTEXITCODE -gt 7) { throw 'Package copy failed' }
           $global:LASTEXITCODE = 0
           New-Item -ItemType Directory build/InsightsPackage/html -Force | Out-Null
+          New-Item -ItemType Directory build/InsightsPackage/docs -Force | Out-Null
           Copy-Item build/html/* build/InsightsPackage/html/ -Recurse -Force
           Copy-Item LICENSE build/InsightsPackage/LICENSE.txt
+          Copy-Item README.md build/InsightsPackage/README.md
+          Copy-Item AGENTS.md build/InsightsPackage/AGENTS.md
+          foreach ($doc in @('LOCAL_INSIGHTS_TESTING.md','JIRAI_GUIDE.md','AGENT_README.md','AI_HANDOFF.md','LOCAL_INSIGHTS_RELEASE.md')) {
+            Copy-Item "docs/$doc" "build/InsightsPackage/docs/$doc"
+          }
           Copy-Item docs/LOCAL_INSIGHTS_TESTING.md build/InsightsPackage/TESTING.md
+          $info = [ordered]@{
+            repository = $env:GITHUB_REPOSITORY
+            commit = $env:GITHUB_SHA
+            ref = $env:GITHUB_REF_NAME
+            runId = $env:GITHUB_RUN_ID
+            runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            build = 'VRCX Insights v3 Cache Preview'
+            upstreamBase = 'v2026.09.16'
+            cacheSchema = 1
+            target = 'Windows x64 CEF'
+            generatedAtUtc = [DateTime]::UtcNow.ToString('o')
+            node = (node --version)
+            dotnet = (dotnet --version)
+            verifiedBeforePackaging = @('integration-idempotence','node-regressions','mounted-vue-ui','real-sqlite-edges','real-sqlite-half-million-history','production-frontend','native-windows-bridge-build')
+            realAccountCefAcceptance = 'NOT_RUN'
+            installUninstallCoexistenceAcceptance = 'NOT_RUN'
+            vrAcceptance = 'NOT_RUN'
+          }
+          $info | ConvertTo-Json -Depth 5 | Set-Content build/InsightsPackage/BUILD_INFO.json -Encoding utf8
           Invoke-WebRequest https://aka.ms/vs/17/release/vc_redist.x64.exe -OutFile build/InsightsPackage/vc_redist.x64.exe
           $sig = Get-AuthenticodeSignature build/InsightsPackage/vc_redist.x64.exe
           if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Microsoft Corporation') { throw 'Untrusted runtime download' }
@@ -72,32 +113,40 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "${env:ProgramFiles(x86)}\NSIS\makensis.exe" Installer/insights.nsi
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Package artifacts and checksums
+      - name: Package artifacts, proof and checksums
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist -Force | Out-Null
-          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.20-preview_Setup.exe
-          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.20-preview.zip
-          Copy-Item docs/LOCAL_INSIGHTS_TESTING.md dist/
+          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.20-cache-v3_Setup.exe
+          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.20-cache-v3.zip
+          Copy-Item README.md dist/README.md
+          Copy-Item build/InsightsPackage/BUILD_INFO.json dist/BUILD_INFO.json
+          foreach ($doc in @('LOCAL_INSIGHTS_TESTING.md','JIRAI_GUIDE.md','AGENT_README.md','AI_HANDOFF.md')) { Copy-Item "docs/$doc" "dist/$doc" }
           Copy-Item tests/local-insights/fixtures.json dist/synthetic-fixture.json
-          Copy-Item test-results/local-insights-report.json dist/
-          Copy-Item test-results/ui-tests.json dist/
-          Copy-Item test-results/applied-integration.diff dist/
+          foreach ($proof in @('local-insights-report.json','ui-tests.json','cache-native.json','cache-edges.json','applied-integration.diff')) {
+            if (!(Test-Path "test-results/$proof")) { throw "Missing test evidence: $proof" }
+            Copy-Item "test-results/$proof" "dist/$proof"
+          }
           Get-ChildItem dist -File | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content dist/SHA256SUMS.txt -Encoding ascii
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: insights-validation-${{ github.run_number }}
+          name: insights-v3-validation-${{ github.run_number }}
           path: |
             test-results/
             dist/
           if-no-files-found: warn
-      - name: Publish successful preview only
+      - name: Publish complete preview only to this fork
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "insights-v2-preview-2026.09.20-${{ github.run_number }}"
+          if ($env:GITHUB_REPOSITORY -cne 'RICHARDwuxiaofei/VRCX_stalk' -or $env:GH_REPO -cne 'RICHARDwuxiaofei/VRCX_stalk') { throw 'Refusing release outside the user fork' }
+          $tag = "insights-v3-cache-2026.09.20-${{ github.run_number }}-${{ github.run_attempt }}"
           $assets = (Get-ChildItem dist -File).FullName
-          gh release create $tag --target $env:GITHUB_SHA --prerelease --title "VRCX Insights v2 Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md $assets
+          gh release create $tag --repo RICHARDwuxiaofei/VRCX_stalk --target $env:GITHUB_SHA --draft --prerelease --title "VRCX Insights v3 Cache Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release upload $tag --repo RICHARDwuxiaofei/VRCX_stalk $assets
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh release edit $tag --repo RICHARDwuxiaofei/VRCX_stalk --draft=false --prerelease
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
