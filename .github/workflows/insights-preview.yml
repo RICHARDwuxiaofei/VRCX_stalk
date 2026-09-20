@@ -1,7 +1,7 @@
 name: Insights Windows Preview
 on:
   push:
-    branches: [codex/local-activity-dashboard-20260920]
+    branches: [fix/local-insights-v2-20260920]
   workflow_dispatch:
 permissions:
   contents: read
@@ -76,8 +76,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist -Force | Out-Null
-          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.16-preview_Setup.exe
-          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.16-preview.zip
+          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.20-preview_Setup.exe
+          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.20-preview.zip
           Copy-Item docs/LOCAL_INSIGHTS_TESTING.md dist/
           Copy-Item tests/local-insights/fixtures.json dist/synthetic-fixture.json
           Copy-Item test-results/local-insights-report.json dist/
@@ -97,7 +97,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "insights-preview-2026.09.16-${{ github.run_number }}"
+          $tag = "insights-v2-preview-2026.09.20-${{ github.run_number }}"
           $assets = (Get-ChildItem dist -File).FullName
-          gh release create $tag --target $env:GITHUB_SHA --prerelease --title "VRCX Insights Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md $assets
+          gh release create $tag --target $env:GITHUB_SHA --prerelease --title "VRCX Insights v2 Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md $assets
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
