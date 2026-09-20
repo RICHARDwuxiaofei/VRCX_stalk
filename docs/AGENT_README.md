@@ -1,18 +1,18 @@
-# Agent README — VRCX Insights v3
+# Agent README — VRCX Insights v4 legacy-cache
 
 Read this together with root `AGENTS.md`, `AI_HANDOFF.md`, and the human README before changing code. This is an implementation guide, not an instruction to invent evidence or to ignore the user's instructions.
 
 ## Repository and delivery boundaries
 
-Write target: **RICHARDwuxiaofei/VRCX_stalk**. Working branch: **feature/local-cache-v3-20260920**. Base release commit: `31a8ede8c1d4225d21d292b70ea646535c4c2bf5`.
+Write target: **RICHARDwuxiaofei/VRCX_stalk**. Working branch: **feature/legacy-db-adapter-v4-20260920**. Base release commit: `31a8ede8c1d4225d21d292b70ea646535c4c2bf5`.
 
 Do not push to `master`, rewrite history, delete branches, create or reopen upstream pull requests, or publish to `vrcx-team/VRCX` / `FuLuTang/VRCX-jirai`. The user explicitly forbids accidental upstream PRs. No PR is needed to build this branch. Never rely on GitHub CLI's implicit fork/upstream selection: use `--repo RICHARDwuxiaofei/VRCX_stalk` for releases and check `GITHUB_REPOSITORY` first.
 
 Before a write or release, re-read the current ref and preserve other contributors' changes. The branch's integration base remains upstream v2026.09.16; do not silently upgrade it. The user's acceptance condition is completed successful Actions plus a downloadable tested Windows preview, not merely a queued run or a pushed source commit.
 
-## What v3 fixes
+## What v4 fixes
 
-The active v2 route loaded whole historic tables into JS, rejected more than 5,000 Locations / 50,000 log rows, and only sliced the UI. Raising limits is not a solution. v3 uses a separate native SQLite cache, bounded source batches, persisted checkpoints, derived presence sessions and backend pagination.
+The active v2 route loaded whole historic tables into JS, rejected more than 5,000 Locations / 50,000 log rows, and only sliced the UI. Raising limits is not a solution. v4 keeps the separate native SQLite cache and adds a read-only historical-schema adapter, bounded source batches, persisted checkpoints, derived presence sessions and backend pagination.
 
 Opening the page must read only cache metadata. `create` creates the file/schema without scanning the source. `start`/`step` are invoked only after the user presses Start/Resume/Update. Opening a ready cache is a separate action. Do not add an onMounted all-history scan, automatic cache-update timer, or background analysis on app startup.
 
@@ -21,6 +21,7 @@ Opening the page must read only cache metadata. `create` creates the file/schema
 | Path | Responsibility |
 | --- | --- |
 | `Dotnet/Insights/InsightsCache.cs` | Identity, schema, source adapters, per-table cursors, import transactions, native action dispatch |
+| `Dotnet/Insights/InsightsCache.Legacy.cs` | Detects historical official table/column variants and projects them into canonical fields without modifying the source |
 | `Dotnet/Insights/InsightsCache.Analysis.cs` | Session materialization, cached people/events/summary SQL |
 | `Dotnet/Insights/SQLiteInsightsBridge.cs` | Existing native SQLite object → guarded JSON cache request |
 | `src/features/local-insights/cacheClient.js` | Account-checked native client; explicit analysis loop; range conversion; v2 group preference compatibility |
@@ -49,6 +50,14 @@ The hash fingerprints the source path, NOT the entire source file. Metadata also
 Cache state machine: `missing → created → ingesting → deriving → ready`. A paused build retains ingesting/deriving plus committed cursor and job ID. `rebuild` preserves the old generated database as a `.previous-...` file and returns to created. A new job ID invalidates stale step requests. Schema mismatch is reported as incompatible; no source schema migration is performed.
 
 Named mutex serialization is scoped to the cache path. Connections do not pool. Writes use short per-batch transactions; raw result readers are disposed before cache mutation. Do not wrap the whole history in one transaction or return entire tables over the CEF boundary.
+
+## Legacy official database compatibility
+
+Historical official VRCX databases are normalized during import, never migrated in place. `ResolveSourceMaps` only selects whitelisted global/account tables and canonicalizes known aliases such as snake_case/camelCase timestamp, user, display-name and world fields. It may use SQLite `rowid` when a historical event table lacks an explicit numeric `id`. Old `DisplayName (usr_...)` rows may recover the embedded ID. Known old join/leave type aliases and Unix second/millisecond timestamps are normalized.
+
+Do not broaden this into heuristic table scraping across unrelated accounts. Account-prefixed tables must still match the active account's known prefix forms. Do not infer missing instance locations. If the required Location or join/leave evidence cannot be interpreted safely, fail with an explicit compatibility error and leave the source untouched.
+
+The cache records `source_profile=current|legacy-adapted`, adapter count, warnings and logical→physical table mapping. A changed adapter signature requires rebuilding derived cache data. Add real SQLite legacy fixtures for every new alias.
 
 ## Source adapters and incremental behavior
 
