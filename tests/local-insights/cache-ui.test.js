@@ -30,7 +30,7 @@ async function pickAlex() {
 
 beforeEach(() => {
     vi.useFakeTimers(); vi.setSystemTime(now); state.dbVars.userId = account; localStorage.clear(); calls = []; failure = ''; heldStep = null;
-    status = { exists: false, phase: 'missing', path: 'C:\\Profile\\AnalyticsCache\\account\\analysis-v1.db', warnings: '[]', imported: 0, total: 2000, derived: 0, deriveTotal: 2000, eventCount: 0, rejected: 0 };
+    status = { exists: false, phase: 'missing', path: 'C:\\Profile\\AnalyticsCache\\account\\analysis-v1.db', warnings: '[]', sourceProfile: 'uninspected', legacyAdapters: 0, imported: 0, total: 2000, derived: 0, deriveTotal: 2000, eventCount: 0, rejected: 0 };
     bridge = vi.fn(async (json) => {
         const q = JSON.parse(json); calls.push(q);
         if (failure === q.action) return JSON.stringify({ error: 'synthetic database error' });
@@ -183,6 +183,14 @@ describe('opt-in native cache page', () => {
         expect(wrapper.text()).toContain('首次分析可能耗费较长时间');
         expect(wrapper.text()).toContain('进入此页面不会自动分析');
     });
+    it('shows that an older VRCX source is normalized without modifying it', async () => {
+        status = { ...status, exists: true, phase: 'ready', sourceProfile: 'legacy-adapted', legacyAdapters: 3, updatedAt: new Date(now).toISOString() };
+        start(); await flushPromises();
+        expect(wrapper.find('[data-test=legacy-source]').exists()).toBe(true);
+        expect(wrapper.text()).toContain('compatibility adapter');
+        expect(wrapper.text()).toContain('Legacy format');
+    });
+
     it('ignores responses after unmounting the page', async () => {
         let release;
         bridge.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
