@@ -5,6 +5,7 @@ on:
     paths:
       - 'Dotnet/Insights/**'
       - 'tests/InsightsCache.Native/**'
+      - 'tests/InsightsCache.Edges/**'
       - '.github/workflows/insights-cache-native.yml'
 permissions:
   contents: read
@@ -21,11 +22,15 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Actual SQLite persistence, large-history and incremental tests
-        run: dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release
+      - name: Actual SQLite edge-case regressions
+        run: dotnet run --project tests/InsightsCache.Edges/InsightsCache.Edges.csproj -c Release
+      - name: Half-million source rows, persistence and incremental tests
+        run: dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release -- --stress
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: insights-cache-native-${{ github.run_number }}
-          path: test-results/cache-native.json
+          path: |
+            test-results/cache-native.json
+            test-results/cache-edges.json
           if-no-files-found: warn
