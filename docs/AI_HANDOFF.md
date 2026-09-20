@@ -1,11 +1,11 @@
-# AI / Agent Handoff — 本地分析缓存 v3
+# AI / Agent Handoff — 本地分析缓存 v4 / 旧 VRCX 兼容
 
 交接日期：2026-09-20。先读根目录 `AGENTS.md`、`README.md` 和 `docs/AGENT_README.md`。
 
 ## 仓库、分支与硬约束
 
 - 唯一写入仓库：`RICHARDwuxiaofei/VRCX_stalk`。
-- 本轮工作分支：`feature/local-cache-v3-20260920`。
+- 本轮工作分支：`feature/legacy-db-adapter-v4-20260920`。
 - 来源为 v2 的 `31a8ede8c1d4225d21d292b70ea646535c4c2bf5`；上游基线仍为 v2026.09.16。
 - 不修改 `master`；不创建、重开或合并到官方 / Jirai 上游的 PR。用户对此有明确且反复强调的要求。
 - 本轮不需要新建任何 PR。已有用户 fork 内部 v2 Draft PR 与本轮交付无关，不要顺手合并或改其目标。
@@ -30,18 +30,19 @@
   → 用户打开缓存，按人/分组/时间范围 SQL 查询与分页
 ```
 
-支持暂停/续建、增量更新、确认后重建；账号及源路径隔离。旧分析文件重建时留备份。原始数据库只读，没有源 schema 迁移。
+支持暂停/续建、增量更新、确认后重建；账号及源路径隔离。旧分析文件重建时留备份。原始数据库只读；v4 会识别已知历史官方 schema 并在读取时投影为当前字段，但不会对源库执行 schema 迁移或写入。
 
 侧边栏集成已经改为 `navDefinitions` + `navLayoutDefaults` 的普通项目，默认排在下方，支持原有布局编辑。旧 `LocalInsightsNav` 顶部注入被移除。不要再改回 Header 插件形式，也不要误称新增了一个仪表板 widget。
 
 ## 优先看这些文件
 
-1. `Dotnet/Insights/InsightsCache.cs`：独立文件、白名单来源、时间规范化、批次事务、游标及元数据。
-2. `Dotnet/Insights/InsightsCache.Analysis.cs`：观察场次重放、在场片段、真实 SQL 分页与组内交集。
-3. `Dotnet/Insights/SQLiteInsightsBridge.cs`：现有全局 SQLite 对象的 JSON 原生入口。
-4. `src/features/local-insights/CacheReview.vue`、`CachePager.vue`、`cacheClient.js`：显式操作流程、账号/请求取消保护和视图。
-5. `build-scripts/apply-local-insights.mjs`：精确、幂等、基线受控的接入脚本。
-6. `tests/InsightsCache.Native`、`tests/InsightsCache.Edges`、`tests/local-insights/cache-*.test.*`：真实数据库与 UI / 导航回归。
+1. `Dotnet/Insights/InsightsCache.cs`：独立文件、批次事务、游标及元数据。
+2. `Dotnet/Insights/InsightsCache.Legacy.cs`：老版官方表/字段别名、rowid 回退、旧显示名用户 ID 与时间规范化。源库始终只读。
+3. `Dotnet/Insights/InsightsCache.Analysis.cs`：观察场次重放、在场片段、真实 SQL 分页与组内交集。
+4. `Dotnet/Insights/SQLiteInsightsBridge.cs`：现有全局 SQLite 对象的 JSON 原生入口。
+5. `src/features/local-insights/CacheReview.vue`、`CachePager.vue`、`cacheClient.js`：显式操作流程、账号/请求取消保护和视图。
+6. `build-scripts/apply-local-insights.mjs`：精确、幂等、基线受控的接入脚本。
+7. `tests/InsightsCache.Native`、`tests/InsightsCache.Edges`、`tests/InsightsCache.Legacy`、`tests/local-insights/cache-*.test.*`：真实数据库与 UI / 导航回归。
 
 旧 `ActivityReview.vue` 和 JS 分析器留作回归对照，正常 v3 路由已不用它们。不能在原生桥接缺失时自动降级回旧的全量读取逻辑。
 
@@ -54,6 +55,12 @@
 - 后续已增加真实 SQLite 边界测试及 `--stress`（26,001 场 / 520,020 条加入离开记录，另有位置与状态等）。这些必须在最终发布提交上再次作为发布门槛执行，实际结论看 Release 随附 JSON 与 Actions，不用较早 PASS 冒充。
 
 开发过程中解决过：单成员组错误混入组外同伴、按 ID 数而不是查看模式判断组内摘要、未显式创建文件时直接 Start、好友快照减少误触发整个历史重建、旧组成员被静默截断等问题。后续修改需保留其测试意图。
+
+## v4 旧数据库兼容约定
+
+开始分析时检测当前源库。支持已知历史 snake_case/camelCase 字段、缺显式 id 时的 SQLite rowid、旧 join/leave 类型别名、Unix 秒/毫秒以及 `DisplayName (usr_...)` 形式。转换只写入独立分析缓存；原数据库必须保持字节不变。
+
+不能安全确定事件时间、加入/离开类型或精确实例位置时不要推测。核心 Location 与 join/leave 无法解析则停止；可选状态/Bio 等表缺失仅报告 coverage warning。当前仍是一源文件一缓存，不自动合并多个旧备份。
 
 ## 数据正确性约定
 
