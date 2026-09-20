@@ -8,6 +8,7 @@
   <ItemGroup>
     <Compile Include="../../Dotnet/Insights/InsightsCache.cs" Link="InsightsCache.cs" />
     <Compile Include="../../Dotnet/Insights/InsightsCache.Analysis.cs" Link="InsightsCache.Analysis.cs" />
+    <Compile Include="../../Dotnet/Insights/InsightsCache.Legacy.cs" Link="InsightsCache.Legacy.cs" />
     <PackageReference Include="System.Data.SQLite" Version="2.0.3" />
     <PackageReference Include="SourceGear.sqlite3" Version="3.53.4" />
   </ItemGroup>
