@@ -1,22 +1,37 @@
-# VRCX Insights Preview v2
+# VRCX Insights v3 Cache Preview
 
-Unofficial Windows x64 preview based on the current `VRCX_stalk` Local Insights branch. **Not a full Jirai port.**
+非官方 Windows x64 预览版，基于 VRCX v2026.09.16。**不是完整 Jirai 移植。** 本次发布仅在 `RICHARDwuxiaofei/VRCX_stalk`，不创建任何上游 Pull Request。
 
-This v2 preview adds the requested Local Insights follow-up:
-- 24-hour / 7-day / 30-day / custom / permanent ranges
-- type-to-search player autocomplete with direct selection
-- Person and Group review modes with locally saved groups
-- group-internal pairwise shared-session review
-- encounter history with 10-row preview, +20 expansion, then page navigation and page-size selection
-- activity logs with All / Join room / Leave room / Status change / Bio change filters
-- SQLite datetime normalization to prevent recent records from being dropped by 24-hour filtering
+## 下载安装
 
-Uses locally stored VRCX data for this review page. Co-presence is observational evidence, not proof of interaction. Missing activity remains unknown.
+下载 `VRCX-Insights_2026.09.20-cache-v3_Setup.exe`，或完整解压 `VRCX-Insights_2026.09.20-cache-v3.zip` 后运行 `VRCX-Insights.exe`。不要仅复制 EXE 或 HTML；v3 增加了原生 C# 缓存模块，前后端必须一起更新。
 
-Windows isolation is preserved: VRCX-Insights.exe, Program Files/VRCX-Insights, %APPDATA%/VRCX-Insights, separate startup/uninstall/IPC identifiers and overlay endpoint. It does not replace the official VRCX installation. Upstream automatic updates are disabled; updates are manual.
+## 这次的操作顺序
 
-The app and installer are **unsigned**. This is a **prerelease** for manual testing. Publication is gated on analysis/database-adapter tests, mounted Vue component tests, production frontend build, native Windows build and installer compilation.
+**正常侧边栏下方 → 共同游玩回顾 → 阅读耗时提示并勾选确认 → 创建分析文件 → 手动开始首次分析 → 完成后打开回顾。**
 
-The exact applied integration diff, test outputs and SHA256 checksums are included with the release assets.
+进入页面和创建文件都不会自动扫描历史。已有缓存可直接打开。增量更新、暂停/继续、重建缓存都由用户手动触发；重建保留旧分析文件备份，不修改原始 VRCX 数据。
 
-The older Jirai relationship subsystem (TwoPersonRelationship / ManualRelations / tracked non-friends and related relationship-graph logic) is **not yet ported** into this preview.
+## 主要变化
+
+- 将 v2 全量 JS 读取改成独立 SQLite 分析文件；源数据库以只读连接打开。
+- 每批最多整理 2,000 条源记录并保存进度，不再受旧的 5,000 位置 / 50,000 日志读取上限影响。
+- 保存规范化事件和在场片段；后续更新只读取新增和回查尾部范围，旧时间的新导入会重放受影响场次。
+- 永久、自定义、24h/7d/30d 都查询缓存。相遇和日志使用真正数据库分页，10 条预览、一次加 20 条，之后可翻到第 6 页及更后；每页条数可调。
+- 保留姓名联想、看人/看分组、组内共同游玩和成员回顾。分组可创建/编辑/删除，兼容 v2 本地分组。
+- 新入口加入正常可自定义导航，默认在底部，不再额外挂在左上角。可以排序、隐藏、归入文件夹，原仪表板功能不变。
+- 增加给人类的 README、原 Jirai 使用/差异指南、Agent README、交接与人工验收说明。
+
+## 文件与数据
+
+默认分析文件在 `%APPDATA%\VRCX-Insights\AnalyticsCache\<账号>\<源路径指纹>\analysis-v1.db`。页面可复制实际路径。这里 `v1` 是缓存结构版本。
+
+当前采用 SQLite，不是 CSV，也没有新增 CSV 导出。替换数据库、较早原行修改或批量导入后，建议手动重建；不能把 ID 尾部回查解释成识别所有历史变更的保证。
+
+本功能只汇总本机已有证据，不推断隐藏位置、真实关系或总在线时间，不自动加群。不完整片段保持未知。Jirai 的灯色分布、非好友远程追踪、关系推测、多账号聚合等没有完整移植。
+
+## 验证与限制
+
+发布步骤必须先通过：原生真实 SQLite 边界与大样本测试、旧逻辑回归、挂载 Vue 测试、集成脚本幂等检查、正式前端构建、Windows 原生编译和安装器编译。相应 JSON、集成 diff、构建信息与 SHA256 附在 Assets 中。
+
+**程序与安装包未签名，真实账号/CEF 图形交互、安装并存/卸载和 VR 体验仍需本机人工验收。** 自动编译通过不等于所有实际使用场景已验证。官方安装、配置目录及更新处理保持隔离；请先备份再测试。
