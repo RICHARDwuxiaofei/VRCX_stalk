@@ -1,7 +1,7 @@
 name: Insights Windows Preview
 on:
   push:
-    branches: [feature/local-cache-v3-20260920]
+    branches: [feature/legacy-db-adapter-v4-20260920]
   workflow_dispatch:
 permissions:
   contents: read
@@ -62,6 +62,8 @@ jobs:
           dotnet-version: '10.0.x'
       - name: Real SQLite duplicate, boundary and cache lifecycle tests
         run: dotnet run --project tests/InsightsCache.Edges/InsightsCache.Edges.csproj -c Release
+      - name: Historical VRCX schema compatibility tests
+        run: dotnet run --project tests/InsightsCache.Legacy/InsightsCache.Legacy.csproj -c Release
       - name: Real SQLite half-million source rows and incremental persistence tests
         run: dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release -- --stress
       - name: Build Windows application including native cache bridge
@@ -90,14 +92,14 @@ jobs:
             ref = $env:GITHUB_REF_NAME
             runId = $env:GITHUB_RUN_ID
             runUrl = "https://github.com/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
-            build = 'VRCX Insights v3 Cache Preview'
+            build = 'VRCX Insights v4 Legacy Cache Preview'
             upstreamBase = 'v2026.09.16'
             cacheSchema = 1
             target = 'Windows x64 CEF'
             generatedAtUtc = [DateTime]::UtcNow.ToString('o')
             node = (node --version)
             dotnet = (dotnet --version)
-            verifiedBeforePackaging = @('integration-idempotence','node-regressions','mounted-vue-ui','real-sqlite-edges','real-sqlite-half-million-history','production-frontend','native-windows-bridge-build')
+            verifiedBeforePackaging = @('integration-idempotence','node-regressions','mounted-vue-ui','real-sqlite-edges','real-sqlite-legacy-adapters','real-sqlite-half-million-history','production-frontend','native-windows-bridge-build')
             realAccountCefAcceptance = 'NOT_RUN'
             installUninstallCoexistenceAcceptance = 'NOT_RUN'
             vrAcceptance = 'NOT_RUN'
@@ -117,13 +119,13 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist -Force | Out-Null
-          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.20-cache-v3_Setup.exe
-          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.20-cache-v3.zip
+          Copy-Item Installer/VRCX-Insights_Setup.exe dist/VRCX-Insights_2026.09.20-cache-v4_Setup.exe
+          Compress-Archive build/InsightsPackage/* dist/VRCX-Insights_2026.09.20-cache-v4.zip
           Copy-Item README.md dist/README.md
           Copy-Item build/InsightsPackage/BUILD_INFO.json dist/BUILD_INFO.json
           foreach ($doc in @('LOCAL_INSIGHTS_TESTING.md','JIRAI_GUIDE.md','AGENT_README.md','AI_HANDOFF.md')) { Copy-Item "docs/$doc" "dist/$doc" }
           Copy-Item tests/local-insights/fixtures.json dist/synthetic-fixture.json
-          foreach ($proof in @('local-insights-report.json','ui-tests.json','cache-native.json','cache-edges.json','applied-integration.diff')) {
+          foreach ($proof in @('local-insights-report.json','ui-tests.json','cache-native.json','cache-edges.json','cache-legacy.json','applied-integration.diff')) {
             if (!(Test-Path "test-results/$proof")) { throw "Missing test evidence: $proof" }
             Copy-Item "test-results/$proof" "dist/$proof"
           }
@@ -131,7 +133,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: insights-v3-validation-${{ github.run_number }}
+          name: insights-v4-validation-${{ github.run_number }}
           path: |
             test-results/
             dist/
@@ -142,9 +144,9 @@ jobs:
         shell: pwsh
         run: |
           if ($env:GITHUB_REPOSITORY -cne 'RICHARDwuxiaofei/VRCX_stalk' -or $env:GH_REPO -cne 'RICHARDwuxiaofei/VRCX_stalk') { throw 'Refusing release outside the user fork' }
-          $tag = "insights-v3-cache-2026.09.20-${{ github.run_number }}-${{ github.run_attempt }}"
+          $tag = "insights-v4-legacy-cache-2026.09.20-${{ github.run_number }}-${{ github.run_attempt }}"
           $assets = (Get-ChildItem dist -File).FullName
-          gh release create $tag --repo RICHARDwuxiaofei/VRCX_stalk --target $env:GITHUB_SHA --draft --prerelease --title "VRCX Insights v3 Cache Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md
+          gh release create $tag --repo RICHARDwuxiaofei/VRCX_stalk --target $env:GITHUB_SHA --draft --prerelease --title "VRCX Insights v4 Legacy Cache Preview (${{ github.run_number }})" --notes-file docs/LOCAL_INSIGHTS_RELEASE.md
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           gh release upload $tag --repo RICHARDwuxiaofei/VRCX_stalk $assets
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
