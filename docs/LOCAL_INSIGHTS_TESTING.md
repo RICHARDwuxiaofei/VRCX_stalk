@@ -1,4 +1,4 @@
-# VRCX Insights v3 验收指南
+# VRCX Insights v4 旧数据库兼容验收指南
 
 这是当前缓存版的测试清单。旧 v2 的演示入口、全量 JS 读取器和 5,000 / 50,000 行限制不是 v3 正常入口。不要拿旧截图或旧测试通过记录代替新版本验收。
 
@@ -34,6 +34,14 @@
 
 右键侧边栏打开自定义导航栏，移动、隐藏、恢复该项目；验证已有自定义文件夹、仪表板入口没有被重置。新功能是同级页面，不是新增一个仪表板 widget 类型。
 
+## 老版 VRCX 数据库验收
+
+准备一个**脱敏副本**而不是唯一原件。开始分析前计算源文件 SHA256；分析完成后再次计算，必须完全一致。旧库被识别后页面应显示“旧版格式 · 已兼容转换”，诊断中给出兼容适配数量。
+
+至少验证：旧 snake_case/camelCase 字段、老式 `DisplayName (usr_...)`、无显式 id 时 rowid、无时区 UTC 文本和 Unix 秒/毫秒。遇到无法解释的核心表应失败并保持源文件不变，不能偷偷 ALTER/UPDATE 源库。
+
+如果两年的历史一直在一个经过官方升级沿用的 SQLite 中，应一次进入同一个缓存；若历史分散在多个备份文件，本版不会自动多源合并。
+
 ## 数据与分页验收
 
 选择一位已知有历史的玩家，验证 24h、7d、30d、自定义和永久。事件时间显示为本机时区，查询用 UTC 毫秒边界。包含状态/Bio 但没有完整房间配对的人也应能显示日志，不应凭空产生共同游玩时长。
@@ -65,6 +73,7 @@ npm ci
 npx vitest run --config tests/local-insights/vitest.config.mjs
 npm run prod
 dotnet run --project tests/InsightsCache.Edges/InsightsCache.Edges.csproj -c Release
+dotnet run --project tests/InsightsCache.Legacy/InsightsCache.Legacy.csproj -c Release
 dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release -- --stress
 ```
 
@@ -76,7 +85,7 @@ dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c R
 
 ## 安装 / 并存 / 卸载
 
-在独立环境记录官方目录、快捷方式、卸载项及配置备份。安装 Insights 后检查 EXE、数据目录、启动项、IPC/overlay 和卸载入口独立；官方协议处理器及官方配置不被替换。验证升级 v2 到 v3 后能识别版本，新缓存单独生成，旧偏好分组仍保留。
+在独立环境记录官方目录、快捷方式、卸载项及配置备份。安装 Insights 后检查 EXE、数据目录、启动项、IPC/overlay 和卸载入口独立；官方协议处理器及官方配置不被替换。验证升级旧 Preview 到 v4 后能识别版本，新缓存单独生成，旧偏好分组仍保留。
 
 分别测试程序退出、重启、系统通知、VR overlay 和卸载后官方程序是否仍能启动。本次自动编译与安装器生成不自动证明上述真实桌面操作全部通过。
 
