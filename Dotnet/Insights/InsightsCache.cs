@@ -31,7 +31,8 @@ public sealed partial class InsightsCache
             throw new ArgumentException("Please sign in before opening the analysis cache.");
         this.sourcePath = Path.GetFullPath(sourcePath);
         this.account = account;
-        prefix = account.Replace("-", "").Replace("_", "");
+        var strippedPrefix = account.Replace("-", "").Replace("_", "");
+        prefix = Regex.IsMatch(strippedPrefix, @"^\d") ? "_" + strippedPrefix : strippedPrefix;
         var key = OperatingSystem.IsWindows() ? this.sourcePath.ToUpperInvariant() : this.sourcePath;
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key))).ToLowerInvariant()[..16];
         CachePath = Path.Combine(Path.GetFullPath(profileRoot), "AnalyticsCache", account, hash, "analysis-v1.db");
@@ -132,7 +133,9 @@ public sealed partial class InsightsCache
             exists = true, path = CachePath, schemaVersion = SchemaVersion,
             phase = Get(db, "phase", "created"), jobId = Get(db, "job_id"), updatedAt = Get(db, "updated_at"), snapshotAt = Get(db, "snapshot_at"),
             imported = MetaLong(db, "imported"), total = MetaLong(db, "total"), derived = MetaLong(db, "derived"), deriveTotal = MetaLong(db, "derive_total"),
-            eventCount = MetaLong(db, "event_count"), sessionCount = MetaLong(db, "session_count"), rejected = MetaLong(db, "rejected_count"), warnings = Get(db, "warnings", "[]")
+            eventCount = MetaLong(db, "event_count"), sessionCount = MetaLong(db, "session_count"), rejected = MetaLong(db, "rejected_count"),
+            warnings = Get(db, "warnings", "[]"), sourceProfile = Get(db, "source_profile", "uninspected"),
+            legacyAdapters = MetaLong(db, "source_adapter_count"), sourceMap = Get(db, "source_map", "[]")
         };
     }
     private object Create(bool rebuild)
@@ -197,29 +200,29 @@ public sealed partial class InsightsCache
             if (Get(db, "phase") == "needs-rebuild") throw new InvalidOperationException("Source history changed. Rebuild the analysis cache first.");
             using var source = Open(sourcePath, true);
             var warnings = new List<string>();
+            var maps = ResolveSourceMaps(source, warnings);
+            if (!maps.Any(map => map.LogicalName == "gamelog_location") || !maps.Any(map => map.LogicalName == "gamelog_join_leave"))
+                throw new InvalidOperationException("This VRCX database is too old or incomplete to reconstruct encounters safely. The source was not modified.");
+            var activeTables = maps.Select(map => map.Spec.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var priorName in Rows(db, "SELECT name FROM cursors").Select(row => Str(row, "name")))
+                if (!activeTables.Contains(priorName))
+                    throw new InvalidOperationException("The source database layout changed since this cache was built. Rebuild the analysis cache.");
             long total = 0;
             using var transaction = db.BeginTransaction();
-            foreach (var spec in Sources())
+            foreach (var map in maps)
             {
-                var columns = Columns(source, spec.Name);
-                if (columns.Count == 0)
-                {
-                    if (Number(db, "SELECT COUNT(*) FROM cursors WHERE name=@name", "@name", spec.Name) > 0) throw new InvalidOperationException("A previously indexed source table is missing. Rebuild the cache.");
-                    warnings.Add(spec.Name + ": unavailable (not recorded/imported)"); continue;
-                }
-                if (!spec.Friend && (!columns.Contains("id") || !columns.Contains("created_at"))) throw new InvalidOperationException("Unsupported source schema: " + spec.Name + ". No source data was modified.");
-                var schema = string.Join(",", columns.OrderBy(x => x));
+                var spec = map.Spec;
+                var schema = map.Signature;
                 var prior = Rows(db, "SELECT * FROM cursors WHERE name=@name LIMIT 1", "@name", spec.Name).FirstOrDefault();
-                var id = spec.Friend ? "rowid" : "id";
-                var high = Number(source, $"SELECT COALESCE(MAX({id}),0) FROM \"{spec.Name}\"");
-                var count = Number(source, $"SELECT COUNT(*) FROM \"{spec.Name}\"");
+                var high = Number(source, $"SELECT COALESCE(MAX({map.IdSql}),0) FROM {QuoteIdentifier(spec.Name)}");
+                var count = Number(source, $"SELECT COUNT(*) FROM {QuoteIdentifier(spec.Name)}");
                 // The current friend list is a replaceable snapshot, not an append-only log.
                 // Removing a friend must not force a full rebuild of all encounter history.
                 if (prior != null && (schema != Str(prior, "schema_hash") || (!spec.Friend && (high < Int(prior, "high") || count < Int(prior, "previous_count")))))
                     throw new InvalidOperationException("Source history was replaced, pruned or migrated. Rebuild the cache instead of reusing stale results.");
                 var previous = prior == null ? 0 : Int(prior, "high");
                 var cursor = spec.Friend ? 0 : Math.Max(0, previous - ReplayTail);
-                var work = Number(source, $"SELECT COUNT(*) FROM \"{spec.Name}\" WHERE {id}>@cursor AND {id}<=@high", "@cursor", cursor, "@high", high);
+                var work = Number(source, $"SELECT COUNT(*) FROM {QuoteIdentifier(spec.Name)} WHERE {map.IdSql}>@cursor AND {map.IdSql}<=@high", "@cursor", cursor, "@high", high);
                 Exec(db, @"INSERT OR REPLACE INTO cursors(name,cursor,high,total,processed,previous_high,previous_count,schema_hash)
                     VALUES(@name,@cursor,@high,@total,0,@previous,@count,@schema)",
                     "@name", spec.Name, "@cursor", cursor, "@high", high, "@total", work, "@previous", previous, "@count", count, "@schema", schema);
@@ -227,7 +230,11 @@ public sealed partial class InsightsCache
             }
             Exec(db, "UPDATE people SET friend=0 WHERE friend<>0");
             Set(db, "phase", "ingesting"); Set(db, "total", total); Set(db, "imported", 0); Set(db, "dirty_from", long.MaxValue);
-            Set(db, "warnings", JsonSerializer.Serialize(warnings)); Set(db, "job_id", Guid.NewGuid().ToString("N")); Set(db, "snapshot_at", DateTimeOffset.UtcNow.ToString("O"));
+            Set(db, "warnings", JsonSerializer.Serialize(warnings));
+            Set(db, "source_adapter_count", maps.Count(map => map.Legacy));
+            Set(db, "source_profile", maps.Any(map => map.Legacy) ? "legacy-adapted" : "current");
+            Set(db, "source_map", JsonSerializer.Serialize(maps.Select(map => new { logical = map.LogicalName, table = map.Spec.Name, legacy = map.Legacy })));
+            Set(db, "job_id", Guid.NewGuid().ToString("N")); Set(db, "snapshot_at", DateTimeOffset.UtcNow.ToString("O"));
             transaction.Commit();
         }
         return Status();
@@ -253,21 +260,24 @@ public sealed partial class InsightsCache
     }
     private void ImportBatch(SQLiteConnection db, Dictionary<string, object?> cursor)
     {
-        var name = Str(cursor, "name"); var spec = Sources().Single(s => s.Name == name); var idColumn = spec.Friend ? "rowid" : "id";
+        var name = Str(cursor, "name");
         using var source = Open(sourcePath, true);
-        if (!spec.Friend && Number(source, $"SELECT COALESCE(MAX({idColumn}),0) FROM \"{name}\"") < Int(cursor, "high")) throw new InvalidOperationException("The source was replaced during indexing. Rebuild the cache.");
-        var batch = Rows(source, $"SELECT {idColumn} AS source_row_id,* FROM \"{name}\" WHERE {idColumn}>@cursor AND {idColumn}<=@high ORDER BY {idColumn} LIMIT {BatchSize}", "@cursor", Int(cursor, "cursor"), "@high", Int(cursor, "high"));
+        var map = ResolveSourceMap(source, name) ?? throw new InvalidOperationException("The source database layout changed during indexing. Rebuild the cache.");
+        var spec = map.Spec;
+        if (!spec.Friend && Number(source, $"SELECT COALESCE(MAX({map.IdSql}),0) FROM {QuoteIdentifier(name)}") < Int(cursor, "high")) throw new InvalidOperationException("The source was replaced during indexing. Rebuild the cache.");
+        var batch = Rows(source, $"SELECT {map.Projection} FROM {QuoteIdentifier(name)} WHERE {map.IdSql}>@cursor AND {map.IdSql}<=@high ORDER BY {map.IdSql} LIMIT {BatchSize}", "@cursor", Int(cursor, "cursor"), "@high", Int(cursor, "high"));
         using var transaction = db.BeginTransaction();
         var dirty = MetaLong(db, "dirty_from", long.MaxValue);
         foreach (var raw in batch)
         {
             var id = Int(raw, "source_row_id"); var user = Str(raw, "user_id"); var displayName = Str(raw, "display_name");
+            NormalizeLegacyIdentity(ref user, ref displayName);
             if (spec.Friend)
             {
                 if (!IsExcluded(user)) UpsertPerson(db, user, displayName, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), true);
                 continue;
             }
-            var kind = spec.Kind.Length > 0 ? spec.Kind : Str(raw, "type");
+            var kind = NormalizeLegacyKind(spec.Kind.Length > 0 ? spec.Kind : Str(raw, "type"));
             var old = id <= Int(cursor, "previous_high") ? Rows(db, "SELECT at_ms,kind,fingerprint FROM events WHERE source=@source AND source_id=@id LIMIT 1", "@source", name, "@id", id).FirstOrDefault() : null;
             var validTime = TryTimestamp(Str(raw, "created_at"), out var at);
             if (!validTime || (kind != "Location" && IsExcluded(user)))
@@ -310,8 +320,15 @@ public sealed partial class InsightsCache
     public static bool TryTimestamp(string raw, out long milliseconds)
     {
         milliseconds = 0;
+        raw = (raw ?? "").Trim();
+        // A few historical exports used Unix seconds/milliseconds instead of ISO text.
+        if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var epoch))
+        {
+            if (epoch > 100000000 && epoch < 100000000000L) { milliseconds = epoch * 1000; return true; }
+            if (epoch >= 100000000000L && epoch < 100000000000000L) { milliseconds = epoch; return true; }
+        }
         // Known VRCX legacy SQLite TEXT timestamps without offsets are UTC.
-        if (!Regex.IsMatch(raw ?? "", @"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")) return false;
+        if (!Regex.IsMatch(raw, @"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")) return false;
         if (!DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var time)) return false;
         milliseconds = time.ToUnixTimeMilliseconds(); return true;
     }
