@@ -57,14 +57,9 @@ public sealed partial class InsightsCache
                 throw new InvalidOperationException("Create the local analysis file explicitly before starting analysis.");
             object result = action switch
             {
-                "status" => Status(),
-                "create" => Create(false),
-                "rebuild" => Create(true),
-                "start" => Start(),
-                "step" => Step(Text(q, "jobId")),
-                "people" => People(q),
-                "events" => Events(q),
-                "summary" => Summary(q),
+                "status" => Status(), "create" => Create(false), "rebuild" => Create(true),
+                "start" => Start(), "step" => Step(Text(q, "jobId")), "people" => People(q),
+                "events" => Events(q), "summary" => Summary(q),
                 _ => throw new ArgumentException("Unknown analysis action.")
             };
             return JsonSerializer.Serialize(result);
@@ -83,12 +78,10 @@ public sealed partial class InsightsCache
         try { db.Open(); return db; }
         catch { db.Dispose(); throw; }
     }
-
     private static SQLiteCommand Command(SQLiteConnection db, string sql, params object?[] args)
     {
         var cmd = new SQLiteCommand(sql, db) { CommandTimeout = 60 };
-        for (var i = 0; i < args.Length; i += 2)
-            cmd.Parameters.AddWithValue((string)args[i]!, args[i + 1] ?? DBNull.Value);
+        for (var i = 0; i < args.Length; i += 2) cmd.Parameters.AddWithValue((string)args[i]!, args[i + 1] ?? DBNull.Value);
         return cmd;
     }
     private static int Exec(SQLiteConnection db, string sql, params object?[] args)
@@ -120,8 +113,7 @@ public sealed partial class InsightsCache
     private static void Set(SQLiteConnection db, string key, object value) =>
         Exec(db, "INSERT INTO meta(key,value) VALUES(@key,@value) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             "@key", key, "@value", Convert.ToString(value, CultureInfo.InvariantCulture) ?? "");
-    private static long MetaLong(SQLiteConnection db, string key, long fallback = 0) =>
-        long.TryParse(Get(db, key), out var value) ? value : fallback;
+    private static long MetaLong(SQLiteConnection db, string key, long fallback = 0) => long.TryParse(Get(db, key), out var value) ? value : fallback;
     private static string Str(Dictionary<string, object?> row, string key) => row.TryGetValue(key, out var value) ? value?.ToString() ?? "" : "";
     private static long Int(Dictionary<string, object?> row, string key) => long.TryParse(Str(row, key), out var n) ? n : 0;
     private static string Text(JsonElement q, string key) => q.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
@@ -134,20 +126,15 @@ public sealed partial class InsightsCache
     {
         if (!File.Exists(CachePath)) return new { exists = false, phase = "missing", path = CachePath, schemaVersion = SchemaVersion };
         using var db = Open(CachePath, true);
-        if (Number(db, "PRAGMA user_version") != SchemaVersion)
-            return new { exists = true, phase = "incompatible", path = CachePath, schemaVersion = SchemaVersion };
+        if (Number(db, "PRAGMA user_version") != SchemaVersion) return new { exists = true, phase = "incompatible", path = CachePath, schemaVersion = SchemaVersion };
         return new
         {
             exists = true, path = CachePath, schemaVersion = SchemaVersion,
-            phase = Get(db, "phase", "created"), jobId = Get(db, "job_id"),
-            updatedAt = Get(db, "updated_at"), snapshotAt = Get(db, "snapshot_at"),
-            imported = MetaLong(db, "imported"), total = MetaLong(db, "total"),
-            derived = MetaLong(db, "derived"), deriveTotal = MetaLong(db, "derive_total"),
-            eventCount = MetaLong(db, "event_count"), sessionCount = MetaLong(db, "session_count"),
-            rejected = MetaLong(db, "rejected_count"), warnings = Get(db, "warnings", "[]")
+            phase = Get(db, "phase", "created"), jobId = Get(db, "job_id"), updatedAt = Get(db, "updated_at"), snapshotAt = Get(db, "snapshot_at"),
+            imported = MetaLong(db, "imported"), total = MetaLong(db, "total"), derived = MetaLong(db, "derived"), deriveTotal = MetaLong(db, "derive_total"),
+            eventCount = MetaLong(db, "event_count"), sessionCount = MetaLong(db, "session_count"), rejected = MetaLong(db, "rejected_count"), warnings = Get(db, "warnings", "[]")
         };
     }
-
     private object Create(bool rebuild)
     {
         if (File.Exists(CachePath))
@@ -185,13 +172,11 @@ public sealed partial class InsightsCache
                     join_ms INTEGER NOT NULL, join_id INTEGER NOT NULL);
             ");
             Exec(db, "PRAGMA user_version=1");
-            Set(db, "phase", "created"); Set(db, "account", account); Set(db, "source", sourcePath);
-            Set(db, "job_id", Guid.NewGuid().ToString("N"));
+            Set(db, "phase", "created"); Set(db, "account", account); Set(db, "source", sourcePath); Set(db, "job_id", Guid.NewGuid().ToString("N"));
             transaction.Commit();
         }
         return Status();
     }
-
     private sealed record Source(string Name, string Kind, bool Friend = false);
     private Source[] Sources() => new[]
     {
@@ -201,8 +186,7 @@ public sealed partial class InsightsCache
         new Source(prefix + "_feed_avatar", "Avatar"), new Source(prefix + "_friend_log_history", ""),
         new Source(prefix + "_friend_log_current", "Friend", true)
     };
-    private static HashSet<string> Columns(SQLiteConnection db, string table) =>
-        Rows(db, $"PRAGMA table_info(\"{table}\")").Select(r => Str(r, "name")).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    private static HashSet<string> Columns(SQLiteConnection db, string table) => Rows(db, $"PRAGMA table_info(\"{table}\")").Select(r => Str(r, "name")).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     private object Start()
     {
@@ -220,19 +204,18 @@ public sealed partial class InsightsCache
                 var columns = Columns(source, spec.Name);
                 if (columns.Count == 0)
                 {
-                    if (Number(db, "SELECT COUNT(*) FROM cursors WHERE name=@name", "@name", spec.Name) > 0)
-                        throw new InvalidOperationException("A previously indexed source table is missing. Rebuild the cache.");
-                    warnings.Add(spec.Name + ": unavailable (not recorded/imported)");
-                    continue;
+                    if (Number(db, "SELECT COUNT(*) FROM cursors WHERE name=@name", "@name", spec.Name) > 0) throw new InvalidOperationException("A previously indexed source table is missing. Rebuild the cache.");
+                    warnings.Add(spec.Name + ": unavailable (not recorded/imported)"); continue;
                 }
-                if (!spec.Friend && (!columns.Contains("id") || !columns.Contains("created_at")))
-                    throw new InvalidOperationException("Unsupported source schema: " + spec.Name + ". No source data was modified.");
+                if (!spec.Friend && (!columns.Contains("id") || !columns.Contains("created_at"))) throw new InvalidOperationException("Unsupported source schema: " + spec.Name + ". No source data was modified.");
                 var schema = string.Join(",", columns.OrderBy(x => x));
                 var prior = Rows(db, "SELECT * FROM cursors WHERE name=@name LIMIT 1", "@name", spec.Name).FirstOrDefault();
                 var id = spec.Friend ? "rowid" : "id";
                 var high = Number(source, $"SELECT COALESCE(MAX({id}),0) FROM \"{spec.Name}\"");
                 var count = Number(source, $"SELECT COUNT(*) FROM \"{spec.Name}\"");
-                if (prior != null && (high < Int(prior, "high") || count < Int(prior, "previous_count") || schema != Str(prior, "schema_hash")))
+                // The current friend list is a replaceable snapshot, not an append-only log.
+                // Removing a friend must not force a full rebuild of all encounter history.
+                if (prior != null && (schema != Str(prior, "schema_hash") || (!spec.Friend && (high < Int(prior, "high") || count < Int(prior, "previous_count")))))
                     throw new InvalidOperationException("Source history was replaced, pruned or migrated. Rebuild the cache instead of reusing stale results.");
                 var previous = prior == null ? 0 : Int(prior, "high");
                 var cursor = spec.Friend ? 0 : Math.Max(0, previous - ReplayTail);
@@ -243,55 +226,42 @@ public sealed partial class InsightsCache
                 total += work;
             }
             Exec(db, "UPDATE people SET friend=0 WHERE friend<>0");
-            Set(db, "phase", "ingesting"); Set(db, "total", total); Set(db, "imported", 0);
-            Set(db, "dirty_from", long.MaxValue); Set(db, "warnings", JsonSerializer.Serialize(warnings));
-            Set(db, "job_id", Guid.NewGuid().ToString("N")); Set(db, "snapshot_at", DateTimeOffset.UtcNow.ToString("O"));
+            Set(db, "phase", "ingesting"); Set(db, "total", total); Set(db, "imported", 0); Set(db, "dirty_from", long.MaxValue);
+            Set(db, "warnings", JsonSerializer.Serialize(warnings)); Set(db, "job_id", Guid.NewGuid().ToString("N")); Set(db, "snapshot_at", DateTimeOffset.UtcNow.ToString("O"));
             transaction.Commit();
         }
         return Status();
     }
-
     private void CheckVersion(SQLiteConnection db)
     {
-        if (Number(db, "PRAGMA user_version") != SchemaVersion || Get(db, "account") != account || Get(db, "source") != sourcePath)
-            throw new InvalidOperationException("The cache format or source identity does not match. Rebuild the cache.");
+        if (Number(db, "PRAGMA user_version") != SchemaVersion || Get(db, "account") != account || Get(db, "source") != sourcePath) throw new InvalidOperationException("The cache format or source identity does not match. Rebuild the cache.");
     }
-
     private object Step(string jobId)
     {
         using (var db = Open(CachePath, false))
         {
             CheckVersion(db);
-            if (string.IsNullOrEmpty(jobId) || Get(db, "job_id") != jobId)
-                throw new InvalidOperationException("The analysis job changed. Reload its status before continuing.");
+            if (string.IsNullOrEmpty(jobId) || Get(db, "job_id") != jobId) throw new InvalidOperationException("The analysis job changed. Reload its status before continuing.");
             if (Get(db, "phase") == "deriving") DeriveBatch(db);
             else if (Get(db, "phase") == "ingesting")
             {
                 var cursor = Rows(db, "SELECT * FROM cursors WHERE cursor<high ORDER BY name LIMIT 1").FirstOrDefault();
-                if (cursor == null) BeginDerivation(db);
-                else ImportBatch(db, cursor);
+                if (cursor == null) BeginDerivation(db); else ImportBatch(db, cursor);
             }
         }
         return Status();
     }
-
     private void ImportBatch(SQLiteConnection db, Dictionary<string, object?> cursor)
     {
-        var name = Str(cursor, "name");
-        var spec = Sources().Single(s => s.Name == name);
-        var idColumn = spec.Friend ? "rowid" : "id";
+        var name = Str(cursor, "name"); var spec = Sources().Single(s => s.Name == name); var idColumn = spec.Friend ? "rowid" : "id";
         using var source = Open(sourcePath, true);
-        if (Number(source, $"SELECT COALESCE(MAX({idColumn}),0) FROM \"{name}\"") < Int(cursor, "high"))
-            throw new InvalidOperationException("The source was replaced during indexing. Rebuild the cache.");
-        var batch = Rows(source, $"SELECT {idColumn} AS source_row_id,* FROM \"{name}\" WHERE {idColumn}>@cursor AND {idColumn}<=@high ORDER BY {idColumn} LIMIT {BatchSize}",
-            "@cursor", Int(cursor, "cursor"), "@high", Int(cursor, "high"));
+        if (!spec.Friend && Number(source, $"SELECT COALESCE(MAX({idColumn}),0) FROM \"{name}\"") < Int(cursor, "high")) throw new InvalidOperationException("The source was replaced during indexing. Rebuild the cache.");
+        var batch = Rows(source, $"SELECT {idColumn} AS source_row_id,* FROM \"{name}\" WHERE {idColumn}>@cursor AND {idColumn}<=@high ORDER BY {idColumn} LIMIT {BatchSize}", "@cursor", Int(cursor, "cursor"), "@high", Int(cursor, "high"));
         using var transaction = db.BeginTransaction();
         var dirty = MetaLong(db, "dirty_from", long.MaxValue);
         foreach (var raw in batch)
         {
-            var id = Int(raw, "source_row_id");
-            var user = Str(raw, "user_id");
-            var displayName = Str(raw, "display_name");
+            var id = Int(raw, "source_row_id"); var user = Str(raw, "user_id"); var displayName = Str(raw, "display_name");
             if (spec.Friend)
             {
                 if (!IsExcluded(user)) UpsertPerson(db, user, displayName, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), true);
@@ -308,11 +278,9 @@ public sealed partial class InsightsCache
                 else Exec(db, "DELETE FROM rejected WHERE source=@source AND source_id=@id", "@source", name, "@id", id);
                 continue;
             }
-            var location = Str(raw, "location");
-            var world = Str(raw, "world_name");
+            var location = Str(raw, "location"); var world = Str(raw, "world_name");
             var detail = new Dictionary<string, string>();
-            foreach (var field in new[] { "status", "status_description", "previous_status", "previous_status_description", "bio", "previous_bio", "previous_location", "avatar_name", "previous_display_name", "trust_level", "previous_trust_level" })
-                if (raw.ContainsKey(field)) detail[field] = Str(raw, field);
+            foreach (var field in new[] { "status", "status_description", "previous_status", "previous_status_description", "bio", "previous_bio", "previous_location", "avatar_name", "previous_display_name", "trust_level", "previous_trust_level" }) if (raw.ContainsKey(field)) detail[field] = Str(raw, field);
             var detailJson = JsonSerializer.Serialize(detail);
             var fingerprint = JsonSerializer.Serialize(new object[] { at, kind, user, displayName, location, world, detailJson });
             if (old != null && Str(old, "fingerprint") == fingerprint) continue;
@@ -323,8 +291,7 @@ public sealed partial class InsightsCache
                 VALUES(@source,@id,@at,@ord,@kind,@user,@name,@location,@world,@detail,@fingerprint)
                 ON CONFLICT(source,source_id) DO UPDATE SET at_ms=excluded.at_ms,ord=excluded.ord,kind=excluded.kind,
                     user_id=excluded.user_id,name=excluded.name,location=excluded.location,world=excluded.world,detail=excluded.detail,fingerprint=excluded.fingerprint",
-                "@source", name, "@id", id, "@at", at, "@ord", order, "@kind", kind, "@user", user,
-                "@name", displayName, "@location", location, "@world", world, "@detail", detailJson, "@fingerprint", fingerprint);
+                "@source", name, "@id", id, "@at", at, "@ord", order, "@kind", kind, "@user", user, "@name", displayName, "@location", location, "@world", world, "@detail", detailJson, "@fingerprint", fingerprint);
             Exec(db, "DELETE FROM rejected WHERE source=@source AND source_id=@id", "@source", name, "@id", id);
             if (!IsExcluded(user)) UpsertPerson(db, user, displayName, at, false);
         }
@@ -333,23 +300,19 @@ public sealed partial class InsightsCache
         Set(db, "dirty_from", dirty); Set(db, "imported", MetaLong(db, "imported") + batch.Count);
         transaction.Commit();
     }
-
     private static void UpsertPerson(SQLiteConnection db, string id, string name, long at, bool friend)
     {
         if (string.IsNullOrWhiteSpace(name)) name = id;
         Exec(db, @"INSERT INTO people(user_id,name,last_ms,friend) VALUES(@id,@name,@at,@friend)
             ON CONFLICT(user_id) DO UPDATE SET name=CASE WHEN excluded.last_ms>=people.last_ms THEN excluded.name ELSE people.name END,
-            last_ms=MAX(people.last_ms,excluded.last_ms),friend=MAX(people.friend,excluded.friend)",
-            "@id", id, "@name", name, "@at", at, "@friend", friend ? 1 : 0);
+            last_ms=MAX(people.last_ms,excluded.last_ms),friend=MAX(people.friend,excluded.friend)", "@id", id, "@name", name, "@at", at, "@friend", friend ? 1 : 0);
     }
-
     public static bool TryTimestamp(string raw, out long milliseconds)
     {
         milliseconds = 0;
-        // VRCX legacy SQLite TEXT timestamps without an offset are UTC, not the viewer's timezone.
+        // Known VRCX legacy SQLite TEXT timestamps without offsets are UTC.
         if (!Regex.IsMatch(raw ?? "", @"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}")) return false;
         if (!DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var time)) return false;
-        milliseconds = time.ToUnixTimeMilliseconds();
-        return true;
+        milliseconds = time.ToUnixTimeMilliseconds(); return true;
     }
 }
