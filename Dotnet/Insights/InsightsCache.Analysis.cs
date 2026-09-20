@@ -15,8 +15,7 @@ public sealed partial class InsightsCache
         if (dirty == long.MaxValue) Finish(db);
         else
         {
-            // Replay from the preceding observer visit, not just the changed row. A late
-            // imported Location/leave can split an already materialized session.
+            // Replay from the preceding observer visit, not just the changed row.
             var previous = Rows(db, "SELECT at_ms FROM events WHERE kind='Location' AND at_ms<@dirty ORDER BY at_ms DESC LIMIT 1", "@dirty", dirty).FirstOrDefault();
             var boundary = previous == null ? Number(db, "SELECT MIN(at_ms) FROM events WHERE ord<3") : Int(previous, "at_ms");
             Exec(db, "DELETE FROM sessions WHERE join_ms>=@boundary OR leave_ms>@boundary", "@boundary", boundary);
@@ -32,7 +31,6 @@ public sealed partial class InsightsCache
 
     private void DeriveBatch(SQLiteConnection db)
     {
-        // Tuple/keyset pagination stays bounded even on multi-year histories.
         var batch = Rows(db, $@"SELECT seq,at_ms,ord,kind,user_id,location FROM events
             WHERE ord<3 AND (at_ms,ord,user_id,location,seq)>(@at,@ord,@user,@location,@seq)
             ORDER BY at_ms,ord,user_id,location,seq LIMIT {BatchSize}",
@@ -202,7 +200,8 @@ public sealed partial class InsightsCache
             members.Add(new { id, name = name == null ? id : Str(name, "name"), observedMs = Int(stats, "observedMs"),
                 completeSessions = Int(stats, "completeSessions"), incompleteSessions = incomplete });
         }
-        var groupFilter = scope.Ids.Length == 1 ? "" : $" AND b.user_id IN ({scope.Placeholders}) AND a.user_id<b.user_id";
+        var groupOnly = scope.Ids.Length > 1 || (q.TryGetProperty("groupOnly", out var groupValue) && groupValue.ValueKind == JsonValueKind.True);
+        var groupFilter = groupOnly ? $" AND b.user_id IN ({scope.Placeholders}) AND a.user_id<b.user_id" : "";
         var pairsSql = $@"SELECT a.user_id AS leftId,b.user_id AS rightId,
             SUM(MIN(a.leave_ms,b.leave_ms,@until)-MAX(a.join_ms,b.join_ms,@from)) AS observedMs,COUNT(*) AS segments
             FROM sessions a JOIN sessions b ON a.visit_id=b.visit_id AND a.location=b.location
