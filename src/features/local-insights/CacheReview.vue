@@ -1,7 +1,7 @@
 <template>
     <section class="ic-page" aria-labelledby="insights-title">
         <header class="ic-header">
-            <div><small>VRCX INSIGHTS · LOCAL CACHE v3</small><h1 id="insights-title">{{ s('共同游玩回顾', 'Shared-session review') }}</h1>
+            <div><small>VRCX INSIGHTS · LOCAL CACHE v4</small><h1 id="insights-title">{{ s('共同游玩回顾', 'Shared-session review') }}</h1>
                 <p>{{ s('先创建本地分析文件，再由你决定何时开始分析。', 'Create a local analysis file, then choose when to analyze it.') }}</p></div>
             <button type="button" :disabled="busy || inspecting" @click="inspect">{{ s('刷新文件状态', 'Refresh file status') }}</button>
         </header>
@@ -12,6 +12,7 @@
             <div class="ic-card-heading"><h2>{{ s('本地分析文件', 'Local analysis file') }}</h2><span>{{ phaseLabel }}</span></div>
             <code class="ic-path">{{ status.path }}</code>
             <p>{{ s('首次分析可能耗费较长时间，并额外占用磁盘空间。原始 VRCX 数据只读；分析缓存单独保存。进入此页面不会自动分析。', 'Initial analysis may take a long time and use additional disk space. Original VRCX data is read-only; the cache is separate. Opening this page never starts analysis automatically.') }}</p>
+            <p v-if="status.sourceProfile === 'legacy-adapted'" class="ic-notice" data-test="legacy-source">{{ s('检测到较老的 VRCX 数据库结构：程序正在通过兼容层把旧字段转换成当前分析格式。不会修改、升级或覆盖你的原始数据库。', 'An older VRCX database layout was detected. A compatibility adapter normalizes legacy fields into the current analysis format without modifying, upgrading, or overwriting the source database.') }}</p>
             <label v-if="!status.exists || status.phase === 'created'" class="ic-consent"><input v-model="consent" data-test="consent" type="checkbox" />{{ s('我已了解耗时和本地缓存占用。', 'I understand the time and local disk-space requirements.') }}</label>
             <div class="ic-actions">
                 <button v-if="!status.exists" data-test="create" type="button" class="ic-primary" :disabled="!consent || busy" @click="createFile(false)">{{ s('创建分析文件（不开始扫描）', 'Create analysis file (no scan)') }}</button>
@@ -37,6 +38,7 @@
             </div>
             <p v-if="status.phase === 'ready'" class="ic-meta">{{ s('缓存更新于', 'Cache updated') }} {{ date(status.updatedAt) }} · {{ number(status.eventCount) }} {{ s('条记录', 'events') }} · {{ number(status.sessionCount) }} {{ s('个完整在场片段', 'complete sessions') }}</p>
             <details v-if="status.exists" class="ic-meta"><summary>{{ s('数据覆盖与诊断', 'Coverage and diagnostics') }}</summary>
+                <p>{{ s('源数据库格式', 'Source database format') }}: {{ sourceProfileLabel }}<template v-if="status.legacyAdapters"> · {{ number(status.legacyAdapters) }} {{ s('个兼容适配', 'legacy adapters') }}</template></p>
                 <p>{{ s('无有效时间戳的记录', 'Records with invalid timestamps') }}: {{ number(status.rejected) }}</p>
                 <p>{{ s('仅分析当前程序已有的日志；其他账号和其他软件的记录不会自动合并。批量导入、替换数据库或修改旧记录后，建议重建缓存。', 'Only logs already stored by this application are analyzed. Other accounts or applications are not merged automatically. Rebuild after bulk imports, database replacement, or old-row edits.') }}</p>
                 <p v-for="warning in warnings" :key="warning">{{ warning }}</p>
@@ -125,6 +127,7 @@ const viewKey = computed(() => JSON.stringify([account.value, reviewIds.value, a
 const progressDone = computed(() => Number(status.value?.phase === 'deriving' ? status.value?.derived : status.value?.imported) || 0);
 const progressTotal = computed(() => Number(status.value?.phase === 'deriving' ? status.value?.deriveTotal : status.value?.total) || 0);
 const phaseLabel = computed(() => ({ missing: s('尚未创建', 'Not created'), created: s('已创建 · 尚未分析', 'Created · not analyzed'), ingesting: s('整理记录中', 'Importing'), deriving: s('建立索引中', 'Indexing'), ready: s('可打开', 'Ready to open'), incompatible: s('需要重建', 'Rebuild required') }[status.value?.phase] || status.value?.phase));
+const sourceProfileLabel = computed(() => ({ uninspected: s('尚未检查（开始分析时检测）', 'Not inspected yet (checked when analysis starts)'), current: s('当前格式', 'Current format'), 'legacy-adapted': s('旧版格式 · 已兼容转换', 'Legacy format · compatibility-normalized') }[status.value?.sourceProfile] || status.value?.sourceProfile || '—'));
 const warnings = computed(() => { try { return JSON.parse(status.value?.warnings || '[]'); } catch { return []; } });
 const number = (n) => Number(n || 0).toLocaleString();
 const date = (value) => value ? new Date(value).toLocaleString() : '—';
@@ -176,7 +179,11 @@ async function analyze() {
         });
         if (valid(generation, key) && result) {
             status.value = result;
-            notice.value = result.phase === 'ready' ? s('分析文件已就绪，点击“打开已生成的回顾”查看。', 'Analysis file is ready. Open the cached review to inspect it.') : s('已暂停，批次进度已保存。下次手动继续即可。', 'Paused; the batch checkpoint is saved. Resume manually later.');
+            notice.value = result.phase === 'ready'
+                ? (result.sourceProfile === 'legacy-adapted'
+                    ? s('旧版 VRCX 数据已通过兼容层整理到独立分析文件；原始数据库未修改。现在可以打开回顾。', 'Legacy VRCX data was normalized into the separate analysis file; the source database was not modified. The review is ready.')
+                    : s('分析文件已就绪，点击“打开已生成的回顾”查看。', 'Analysis file is ready. Open the cached review to inspect it.'))
+                : s('已暂停，批次进度已保存。下次手动继续即可。', 'Paused; the batch checkpoint is saved. Resume manually later.');
         }
     } catch (e) { if (valid(generation, key)) error.value = message(e); }
     finally { if (generation === lifecycle) busy.value = false; }
