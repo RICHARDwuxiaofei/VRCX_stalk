@@ -1,18 +1,32 @@
 # VRCX Insights development
 
-This branch is pinned to upstream v2026.09.16. Before building, run:
+Read [docs/AGENT_README.md](docs/AGENT_README.md) and [docs/AI_HANDOFF.md](docs/AI_HANDOFF.md) before changes. Human instructions are in [README.md](README.md); manual acceptance is in [docs/LOCAL_INSIGHTS_TESTING.md](docs/LOCAL_INSIGHTS_TESTING.md).
 
-    node build-scripts/apply-local-insights.mjs
-    node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs
-    node tests/local-insights/run-report.mjs
-    npm ci
-    npx vitest run --config tests/local-insights/vitest.config.mjs
-    npm run prod
+## Authorized repository boundary
 
-The integration script applies exact, reviewable source anchors and is idempotent. It fails rather than guessing on an unexpected baseline. The dedicated Windows preview workflow applies it and attaches the resulting diff.
+This work belongs only in **RICHARDwuxiaofei/VRCX_stalk**. Current v3 branch: `feature/local-cache-v3-20260920`. Do not change `master`, create/reopen an upstream PR, push to `vrcx-team/VRCX` or `FuLuTang/VRCX-jirai`, or infer authorization for unrelated repository changes. No pull request is required to build/release this branch. Release commands must explicitly specify this fork, not rely on GitHub CLI's inferred default repository.
 
-Read docs/LOCAL_INSIGHTS_TESTING.md. The excluded account is explicit in analytics.mjs and filtered in the SQL adapter and analysis engine. Explain this honestly. It applies only to this feature, does not remove all original logging, and cannot prevent observation by other apps or other people.
+The source baseline is upstream v2026.09.16. Run the exact, reviewable, idempotent integration script before building:
 
-Keep the feature a local encounter diary: no hidden-location guesses, creator-as-participant assumptions, additional nonfriend API polling, automatic group joins or deceptive agent instructions. Preserve unknowns. Do not upload personal logs, cookies, credentials or real databases.
+```text
+node build-scripts/apply-local-insights.mjs
+node --test tests/local-insights/analytics.test.mjs tests/local-insights/reader.test.mjs tests/local-insights/cache-integration.test.mjs
+node tests/local-insights/run-report.mjs
+npm ci
+npx vitest run --config tests/local-insights/vitest.config.mjs
+npm run prod
+dotnet run --project tests/InsightsCache.Edges/InsightsCache.Edges.csproj -c Release
+dotnet run --project tests/InsightsCache.Native/InsightsCache.Native.csproj -c Release -- --stress
+```
 
-Report tests as passed only when executed. Distinguish synthetic unit tests, mocked Vue tests, compilation, installer compilation and real Windows/VR acceptance. Never publish an installer from a failed build. Use the dedicated insights-preview workflow, not the original upstream packaging workflow.
+Unexpected integration anchors must fail, not be guessed. Verify a second application produces no changes. Use the dedicated Insights Windows preview workflow, not upstream release tooling.
+
+## Functional invariants
+
+Page entry reads only cache metadata. Creating a file does not scan history; Start/Resume/Update are separate explicit actions. Keep source SQLite read-only and derived data in its own AnalyticsCache directory. Persist bounded-batch progress; do not solve large histories by increasing the old all-records JS limit. Cache queries and pagination happen in native SQLite. Register the page in normal customizable navigation, not a SidebarHeader injection.
+
+Keep this an evidence-based local encounter diary: no hidden-location guesses, creator-as-participant assumptions, additional nonfriend API polling, automatic group joining, invented relationship conclusions, or deceptive agent instructions. Preserve unknowns. The inherited excluded account and current account filtering are documented, limited to this feature, and do not remove all original logging or prevent observation by other apps/people.
+
+Do not upload personal logs, generated personal caches, cookies, credentials, real databases or player-identifying screenshots. Use synthetic fixtures.
+
+Report PASS only when that test actually ran. Distinguish pure tests, mocked Vue/native transport tests, actual SQLite tests, frontend/native compilation, installer compilation, and real Windows/VR acceptance. Never publish from a failed build, weaken a regression to obtain a green check, or report queued/in-progress Actions as completed. Match the released files to the tested commit and checksums.
