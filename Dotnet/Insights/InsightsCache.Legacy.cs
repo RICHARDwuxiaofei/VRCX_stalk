@@ -40,7 +40,7 @@ public sealed partial class InsightsCache
         new("friend_log_current", "Friend", true, new[] { "_friend_log_current" }, Array.Empty<string>())
     };
 
-    private static string QuoteIdentifier(string value) => "\\"" + value.Replace("\\"", "\\"\\\"") + "\\"";
+    private static string QuoteIdentifier(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
     private static string SqlColumn(string value) => value.Equals("rowid", StringComparison.OrdinalIgnoreCase) ? "rowid" : QuoteIdentifier(value);
 
     private string[] AccountPrefixes()
